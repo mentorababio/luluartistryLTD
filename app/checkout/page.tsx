@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, Truck, CreditCard, CheckCircle, Shield, Copy, ChevronRight, Plus } from "lucide-react";
+import { User, Truck, CreditCard, CheckCircle, Shield, Copy, ChevronRight, Plus, Loader } from "lucide-react";
 import toast from "react-hot-toast";
-import { products } from "@/utils/portfolioData";
+import { apiClient } from "@/lib/api/client";
 
 export default function CheckoutPage() {
 	const router = useRouter();
@@ -35,6 +35,8 @@ export default function CheckoutPage() {
 		cvv: "",
 		cardholderName: ""
 	});
+
+	const [isProcessing, setIsProcessing] = useState(false);
 
 	const [bankDetails, setBankDetails] = useState({
 		bankName: "Lulu Artistry LTD - GTBank",
@@ -94,7 +96,7 @@ export default function CheckoutPage() {
 		toast.success(`${label} copied to clipboard!`);
 	};
 
-	const handleProceed = () => {
+	const handleProceed = async () => {
 		if (!customerData.fullName || !customerData.email || !customerData.phone || !customerData.streetAddress || !customerData.city || !customerData.state) {
 			toast.error("Please fill in all required customer details");
 			return;
@@ -112,35 +114,70 @@ export default function CheckoutPage() {
 			return;
 		}
 
-		// Save order and navigate to success page
-		const orderData = {
-			...customerData,
-			deliveryMethod,
-			paymentMethod,
-			items: cartItems,
-			subtotal: calculateSubtotal(),
-			shipping: getShippingCost(),
-			total: calculateTotal()
-		};
+		setIsProcessing(true);
 
-		localStorage.setItem("currentOrder", JSON.stringify(orderData));
-		
-		// Clear cart
-		localStorage.removeItem("cart");
-		
-		// Navigate to order success
-		router.push("/order-success");
+		try {
+			// Parse customer name into first and last name
+			const nameParts = customerData.fullName.trim().split(' ');
+			const firstName = nameParts[0] || '';
+			const lastName = nameParts.slice(1).join(' ') || '';
+
+			// Prepare order data for API
+			const orderPayload = {
+				items: cartItems.map(item => ({
+					product: item.id,
+					quantity: item.quantity || 1,
+					price: item.price,
+					variant: item.variant
+				})),
+				customerInfo: {
+					firstName,
+					lastName,
+					email: customerData.email,
+					phone: customerData.phone
+				},
+				shippingAddress: {
+					street: customerData.streetAddress,
+					city: customerData.city,
+					state: customerData.state,
+					landmark: ''
+				},
+				deliveryZone: {
+					zone: customerData.state,
+					cost: getShippingCost()
+				},
+				paymentMethod: paymentMethod === 'card' ? 'paystack' : 'bank_transfer',
+				notes: ''
+			};
+
+			// Create order via API
+			const response = await apiClient.post<any>('/orders', orderPayload);
+
+			if (!response.data) {
+				throw new Error('Failed to create order');
+			}
+
+			// Save order for reference
+			localStorage.setItem("currentOrder", JSON.stringify(response.data));
+			localStorage.removeItem("cart");
+
+			toast.success('Order created successfully!');
+
+			// Redirect to Paystack payment or success
+			if (paymentMethod === 'card') {
+				// If Paystack is implemented, redirect to payment
+				// For now, redirect to success
+				router.push("/order-success");
+			} else {
+				router.push("/order-success");
+			}
+		} catch (error: any) {
+			console.error('Order creation failed:', error);
+			toast.error(error?.message || 'Failed to create order. Please try again.');
+		} finally {
+			setIsProcessing(false);
+		}
 	};
-
-	const recommendedProducts = products
-		.filter(p => p.id !== cartItems[0]?.id)
-		.slice(0, 2)
-		.map(p => ({
-			id: p.id,
-			name: p.name,
-			price: p.price,
-			image: p.image
-		}));
 
 	const addToCart = (product: any) => {
 		const savedCart = localStorage.getItem("cart");
@@ -548,9 +585,15 @@ export default function CheckoutPage() {
 						<div>
 							<button
 								onClick={handleProceed}
-								className="w-full bg-primary-gold hover:bg-yellow-500 text-black font-bold py-4 px-6 rounded-lg transition-all duration-300"
+								disabled={isProcessing}
+								className={`w-full font-bold py-4 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${
+									isProcessing
+										? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+										: 'bg-primary-gold hover:bg-yellow-500 text-black'
+								}`}
 							>
-								Proceed
+								{isProcessing && <Loader className="w-4 h-4 animate-spin" />}
+								{isProcessing ? 'Processing...' : 'Proceed'}
 							</button>
 							<label className="flex items-center gap-2 mt-4 text-sm text-gray-600">
 								<input
@@ -638,37 +681,6 @@ export default function CheckoutPage() {
 								/>
 								<span>Remember all information for faster payments</span>
 							</label>
-
-							{/* You may also like */}
-							{recommendedProducts.length > 0 && (
-								<div>
-									<h3 className="font-semibold text-dark-gray mb-4">You may also like</h3>
-									<div className="space-y-4">
-										{recommendedProducts.map((product) => (
-											<div key={product.id} className="flex gap-3">
-												<div className="relative w-16 h-16 flex-shrink-0 bg-gray-100 rounded">
-													<Image
-														src={product.image}
-														alt={product.name}
-														fill
-														className="object-cover rounded"
-													/>
-												</div>
-												<div className="flex-1">
-													<p className="font-semibold text-sm text-dark-gray">{product.name}</p>
-													<p className="font-bold text-primary-gold text-sm">{formatPrice(product.price)}</p>
-													<button
-														onClick={() => addToCart(product)}
-														className="mt-2 text-xs bg-primary-gold hover:bg-yellow-500 text-black px-3 py-1 rounded font-semibold transition-colors"
-													>
-														Add
-													</button>
-												</div>
-											</div>
-										))}
-									</div>
-								</div>
-							)}
 						</div>
 					</div>
 				</div>

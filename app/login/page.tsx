@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
@@ -11,20 +12,86 @@ export default function LoginPage() {
 	const [formData, setFormData] = useState({
 		name: "",
 		email: "",
+		phone: "",
 		password: "",
 		confirmPassword: ""
 	});
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const router = useRouter();
+
+	const apiBaseRaw = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+	const apiBase = apiBaseRaw ? apiBaseRaw.replace(/\/$/, '') : '';
+
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+
+		if (!formData.email || !formData.password) {
+			toast.error('Please provide email and password');
+			return;
+		}
+
 		if (isLogin) {
-			console.log("Login:", formData.email, formData.password);
-		} else {
-			if (formData.password !== formData.confirmPassword) {
-				toast.error("Passwords do not match");
+			try {
+				const url = apiBase ? `${apiBase}/auth/login` : '/api/auth/login';
+				const res = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email: formData.email, password: formData.password }),
+				});
+
+				const data = await res.json();
+				if (!res.ok) {
+					toast.error(data?.message || 'Login failed');
+					return;
+				}
+
+				// Save token and navigate
+				if (data?.data?.token) {
+					localStorage.setItem('token', data.data.token);
+				}
+				toast.success('Login successful');
+				router.push('/');
+			} catch (err) {
+				toast.error('Network error during login');
+			}
+			return;
+		}
+
+		// Registration
+		if (formData.password !== formData.confirmPassword) {
+			toast.error('Passwords do not match');
+			return;
+		}
+
+		try {
+			const url = apiBase ? `${apiBase}/auth/register` : '/api/auth/register';
+			const res = await fetch(url, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					firstName: formData.name?.split(' ')[0] || '',
+					lastName: formData.name?.split(' ').slice(1).join(' ') || '',
+					email: formData.email,
+					phone: formData.phone,
+					password: formData.password,
+				}),
+			});
+
+			const data = await res.json();
+			if (!res.ok) {
+				toast.error(data?.message || 'Registration failed');
 				return;
 			}
-			console.log("Register:", formData);
+
+			// Store token if returned
+			if (data?.data?.token) {
+				localStorage.setItem('token', data.data.token);
+			}
+
+			toast.success('Account created');
+			router.push('/');
+		} catch (err) {
+			toast.error('Network error during registration');
 		}
 	};
 
@@ -54,6 +121,22 @@ export default function LoginPage() {
 									required={!isLogin}
 									className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent"
 									placeholder="Enter your full name"
+								/>
+							</div>
+						)}
+
+						{!isLogin && (
+							<div>
+								<label className="block text-sm font-semibold text-gray-700 mb-2">
+									Phone Number
+								</label>
+								<input
+									type="tel"
+									value={formData.phone}
+									onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+									required={!isLogin}
+									className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent"
+									placeholder="Enter your phone number"
 								/>
 							</div>
 						)}
@@ -144,7 +227,7 @@ export default function LoginPage() {
 							<button
 								onClick={() => {
 									setIsLogin(!isLogin);
-									setFormData({ name: "", email: "", password: "", confirmPassword: "" });
+								setFormData({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
 								}}
 								className="text-primary-gold font-semibold hover:underline"
 							>

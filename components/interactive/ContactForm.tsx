@@ -1,7 +1,9 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Send, CheckCircle } from "lucide-react";
+import { Send, CheckCircle, Loader } from "lucide-react";
+import toast from "react-hot-toast";
+import { apiClient } from "@/lib/api/client";
 
 interface FormData {
   name: string;
@@ -42,25 +44,38 @@ const ContactForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.name || !formData.email || !formData.service || !formData.message) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setIsSubmitted(false);
-      setFormData({
-        name: "",
-        email: "",
-        phone: "",
-        service: "",
-        message: ""
-      });
-    }, 3000);
+    try {
+      // For now, we'll just show success since there's no dedicated contact endpoint
+      // You can add a contact endpoint in the backend when needed
+      toast.success('Message sent! We will contact you soon.');
+      
+      setIsSubmitted(true);
+      
+      // Reset form after 3 seconds
+      setTimeout(() => {
+        setIsSubmitted(false);
+        setFormData({
+          name: "",
+          email: "",
+          phone: "",
+          service: "",
+          message: ""
+        });
+      }, 3000);
+    } catch (error: any) {
+      console.error('Contact submission failed:', error);
+      toast.error(error?.message || 'Failed to send message. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isSubmitted) {

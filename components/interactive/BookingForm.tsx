@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, Clock, User, Phone, Mail, CheckCircle } from "lucide-react";
+import { Calendar, Clock, User, Phone, Mail, CheckCircle, Loader } from "lucide-react";
+import toast from "react-hot-toast";
+import { apiClient } from "@/lib/api/client";
 
 interface BookingData {
   name: string;
@@ -51,27 +53,67 @@ const BookingForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.name || !formData.email || !formData.phone || !formData.service || !formData.date || !formData.time) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Parse name into first and last
+      const nameParts = formData.name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
 
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setIsSubmitted(false);
-      setFormData({
-        name: "",
-        email: "",
-        phone: "",
-        service: "",
-        date: "",
-        time: "",
-        message: ""
-      });
-    }, 3000);
+      // Parse time slot
+      const timeSlot = {
+        start: formData.time,
+        end: formData.time // API will handle calculating end time based on service
+      };
+
+      // Call booking endpoint
+      const bookingPayload = {
+        service: formData.service,
+        artist: {
+          type: 'lulu', // Default artist type
+          name: 'Lulu'
+        },
+        location: 'port-harcourt', // Default location
+        appointmentDate: formData.date,
+        timeSlot,
+        notes: formData.message || ''
+      };
+
+      const response = await apiClient.post<any>('/bookings', bookingPayload);
+
+      if (!response.data) {
+        throw new Error('Failed to create booking');
+      }
+
+      toast.success('Booking confirmed! We will contact you soon.');
+      setIsSubmitted(true);
+      
+      // Reset form after 3 seconds
+      setTimeout(() => {
+        setIsSubmitted(false);
+        setFormData({
+          name: "",
+          email: "",
+          phone: "",
+          service: "",
+          date: "",
+          time: "",
+          message: ""
+        });
+      }, 3000);
+    } catch (error: any) {
+      console.error('Booking failed:', error);
+      toast.error(error?.message || 'Failed to create booking. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isSubmitted) {

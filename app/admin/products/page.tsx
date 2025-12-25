@@ -385,7 +385,7 @@ export default function ProductsPage() {
       {showAddModal && (
         <>
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-50"
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50"
             onClick={() => {
               setShowAddModal(false);
               setFormData({
@@ -547,7 +547,7 @@ export default function ProductsPage() {
       {showEditModal && selectedProduct && (
         <>
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-50"
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50"
             onClick={() => {
               setShowEditModal(false);
               setSelectedProduct(null);
@@ -707,7 +707,7 @@ export default function ProductsPage() {
       {showDeleteModal && selectedProduct && (
         <>
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-50"
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50"
             onClick={() => {
               setShowDeleteModal(false);
               setSelectedProduct(null);

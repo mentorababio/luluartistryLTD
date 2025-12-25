@@ -1,32 +1,13 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/api/response';
-import { requireAuth, requireAdmin } from '@/lib/api/auth';
-import { getAllOrders } from '@/lib/api/db';
+import { proxyRequest } from '@/lib/api/proxy';
 
+/**
+ * Proxy route for admin to get all orders
+ * Forwards request to backend API
+ */
 export async function GET(request: NextRequest) {
-  try {
-    const user = requireAuth(request);
-    if (!user || !requireAdmin(user)) {
-      return errorResponse('Unauthorized', 401);
-    }
-
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '20');
-    const status = url.searchParams.get('status');
-
-    const { orders, total } = getAllOrders(page, limit, status || undefined);
-
-    return successResponse({
-      orders,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    });
-  } catch (error) {
-    return errorResponse('Failed to fetch orders', 500);
-  }
+  // Forward query parameters
+  const url = new URL(request.url);
+  const queryString = url.search;
+  return proxyRequest(request, `/orders/admin/all${queryString}`);
 }

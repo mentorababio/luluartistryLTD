@@ -1,12 +1,10 @@
 import { NextRequest } from 'next/server';
-import { successResponse } from '@/lib/api/response';
-import { getAllCategories } from '@/lib/api/db';
+import { proxyRequest } from '@/lib/api/proxy';
 
+/**
+ * Proxy route for categories
+ * Forwards request to backend API
+ */
 export async function GET(request: NextRequest) {
-  try {
-    const categories = getAllCategories();
-    return successResponse(categories);
-  } catch (error) {
-    return successResponse([]);
-  }
+  return proxyRequest(request, '/categories');
 }

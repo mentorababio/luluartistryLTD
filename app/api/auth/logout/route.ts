@@ -1,7 +1,14 @@
 import { NextRequest } from 'next/server';
-import { successResponse } from '@/lib/api/response';
+import { proxyRequest } from '@/lib/api/proxy';
 
+/**
+ * Proxy route for user logout
+ * Forwards request to backend API
+ */
 export async function GET(request: NextRequest) {
-  // In production, invalidate the token on the frontend
-  return successResponse({ message: 'Logged out successfully' }, 'Logout successful');
+  return proxyRequest(request, '/auth/logout');
+}
+
+export async function POST(request: NextRequest) {
+  return proxyRequest(request, '/auth/logout');
 }

@@ -1,62 +1,17 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/api/response';
-import { getAllProducts, getProductById, getFeaturedProducts, getProductsByCategory, createProduct, updateProduct, deleteProduct } from '@/lib/api/db';
-import { requireAuth, requireAdmin } from '@/lib/api/auth';
+import { proxyRequest } from '@/lib/api/proxy';
 
+/**
+ * Proxy route for products
+ * Forwards request to backend API
+ */
 export async function GET(request: NextRequest) {
-  try {
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '12');
-    const category = url.searchParams.get('category');
-    const search = url.searchParams.get('search');
-    const sort = url.searchParams.get('sort') || '-createdAt';
-
-    const { products, total } = getAllProducts(page, limit, category || undefined, search || undefined, sort);
-
-    return successResponse({
-      products,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    });
-  } catch (error) {
-    return errorResponse('Failed to fetch products', 500);
-  }
+  // Forward query parameters
+  const url = new URL(request.url);
+  const queryString = url.search;
+  return proxyRequest(request, `/products${queryString}`);
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const user = requireAuth(request);
-    if (!user || !requireAdmin(user)) {
-      return errorResponse('Unauthorized', 401);
-    }
-
-    const body = await request.json();
-    const { name, description, price, comparePrice, category, images, variants, stock, tags, isFeatured } = body;
-
-    if (!name || !price || !category) {
-      return errorResponse('Missing required fields', 400);
-    }
-
-    const product = createProduct({
-      name,
-      description: description || '',
-      price,
-      comparePrice,
-      category,
-      images: images || [],
-      variants,
-      stock: stock || 0,
-      tags: tags || [],
-      isFeatured: isFeatured || false,
-    });
-
-    return successResponse(product, 'Product created successfully', 201);
-  } catch (error) {
-    return errorResponse('Failed to create product', 500);
-  }
+  return proxyRequest(request, '/products');
 }

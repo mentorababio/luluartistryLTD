@@ -7,30 +7,21 @@ import toast from "react-hot-toast";
 import Curated from "@/components/home/Curated";
 import MapSection from "@/components/common/MapSection";
 import TestimonialCarousel from "@/components/home/TestimonialCarousel";
+import { useProducts, Product } from "@/hooks/useProducts";
 
-// Import your product images from assets
-import Dbed from "@/assets/images/DBed cover.png";
-import ExScrup from "@/assets/images/ExScrup.png";
-import Rqfr from "@/assets/images/Rose QFR.png";
-import OneBtm from "@/assets/images/One BTM.png";
-import twoBtm from "@/assets/images/two btm.png";
-import oneBtmCover from "@/assets/images/One BTM cover.png";
-import lashbed from "@/assets/images/lash bed.png";
+// Import Instagram images
 import Igone from "@/assets/images/IG1.png";
 import Igtwo from "@/assets/images/IG2.png";
 import Igthree from "@/assets/images/IG3.png";
-import MastP60 from "@/assets/images/P60.png";
-import primer from "@/assets/images/Ib primer.png";
-import browsalant from "@/assets/images/brow sealant.png";
-import dummyhead from "@/assets/images/Dummy head.png";
-import doublearm from "@/assets/images/Double ARM LIGHT.png";
-import eyepatch from "@/assets/images/eye patch.png";
-import lashblanket from "@/assets/images/lash bed blanket.png";
-import browmapping from "@/assets/images/brow mapping pen.png";
-import lashwash from "@/assets/images/lash wash brush.png";
 
 const Newarrival = () => {
   const [favorites, setFavorites] = useState<string[]>([]);
+
+  // Fetch new arrivals from backend (sorted by newest first)
+  const { products: newArrivals, loading } = useProducts({
+    sort: "-createdAt", // Sort by newest first
+    limit: 16,
+  });
 
   // Load favorites from localStorage on mount
   useEffect(() => {
@@ -40,64 +31,48 @@ const Newarrival = () => {
     }
   }, []);
 
-  const newArrivals = [
-    { id: 1, name: "Lash Bed", price: 230000, image: lashbed, rating: 4.5 },
-    { id: 2, name: "Disposable Bed Cover", price: 24000, image: Dbed, rating: 4.8 },
-    { id: 3, name: "Exfoliating Body Scrub", price: 14000, image: ExScrup, rating: 4.3 },
-    { id: 4, name: "Rose Quartz Facial Roll", price: 12000, image: Rqfr, rating: 4.7 },
-    { id: 5, name: "Mast P60 Machine", price: 450000, image: MastP60, rating: 4.9 },
-    { id: 6, name: "One Battery Tattoo Machine", price: 55000, image: OneBtm, rating: 4.9 },
-    { id: 7, name: "Two Battery Tattoo Machine", price: 45000, image: twoBtm, rating: 4.4 },
-    { id: 8, name: "One Battery Tattoo Machine Cover", price: 500, image: oneBtmCover, rating: 4.2 },
-    { id: 9, name: "Ib Primer", price: 10000, image: primer, rating: 4.2 },
-    { id: 10, name: "Brow Sealant", price: 10000, image: browsalant, rating: 4.2 },
-    { id: 11, name: "Dummy Head", price: 6500, image: dummyhead, rating: 4.2 },
-    { id: 12, name: "Double ARM LIGHT", price: 65000, image: doublearm, rating: 4.2 },
-    { id: 13, name: "Eye Patch", price: 5000, image: eyepatch, rating: 4.2 },
-    { id: 14, name: "Lash Bed Blanket", price: 25000, image: lashblanket, rating: 4.2 },
-    { id: 15, name: "Brow Mapping Pen", price: 4500, image: browmapping, rating: 4.2 },
-    { id: 16, name: "Lash Wash Brush", price: 2000, image: lashwash, rating: 4.2 },
-  ];
-
-  const toggleFavorite = (productId: number) => {
-    const idStr = productId.toString();
-    setFavorites(prev => {
-      const updated = prev.includes(idStr) 
-        ? prev.filter(id => id !== idStr)
-        : [...prev, idStr];
+  const toggleFavorite = (productId: string) => {
+    setFavorites((prev) => {
+      const updated = prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId];
       localStorage.setItem("wishlist", JSON.stringify(updated));
       return updated;
     });
   };
 
-  const addToCart = (productId: number) => {
-    const product = newArrivals.find(p => p.id === productId);
-    if (!product) return;
-
+  const addToCart = (product: Product) => {
     const savedCart = localStorage.getItem("cart");
     const cartItems = savedCart ? JSON.parse(savedCart) : [];
-    
-    const existingItem = cartItems.find((item: any) => item.id === productId.toString());
+
+    const existingItem = cartItems.find((item: any) => item.id === product.id);
     if (existingItem) {
       existingItem.quantity = (existingItem.quantity || 1) + 1;
     } else {
-      // Convert product to match cart format
-      cartItems.push({ 
-        id: productId.toString(),
+      // Convert backend product format to cart format
+      const mainImage =
+        Array.isArray(product.images) && product.images.length > 0
+          ? typeof product.images[0] === "string"
+            ? product.images[0]
+            : product.images[0]?.url || "/placeholder.png"
+          : "/placeholder.png";
+
+      cartItems.push({
+        id: product.id,
         name: product.name,
         price: product.price,
-        image: product.image,
+        image: mainImage,
         quantity: 1,
-        inStock: true
+        inStock: product.inStock,
       });
     }
-    
+
     localStorage.setItem("cart", JSON.stringify(cartItems));
     toast.success(`${product.name} added to cart!`);
   };
 
   const formatPrice = (price: number) => {
-    return `₦${price.toLocaleString('en-NG')}`;
+    return `₦${price.toLocaleString("en-NG")}`;
   };
 
   const renderStars = (rating: number) => {
@@ -106,9 +81,9 @@ const Newarrival = () => {
         key={i}
         size={14}
         className={`${
-          i < Math.floor(rating) 
-            ? 'text-yellow-400 fill-current' 
-            : 'text-gray-300'
+          i < Math.floor(rating)
+            ? "text-yellow-400 fill-current"
+            : "text-gray-300"
         }`}
       />
     ));
@@ -123,54 +98,100 @@ const Newarrival = () => {
           <h1 className="text-3xl md:text-4xl font-bold mb-4">New Arrivals</h1>
         </div>
 
-        {/* Products Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-          {newArrivals.map((product) => (
-            <div
-              key={product.id}
-              className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
-            >
-              <div className="relative aspect-square" style={{ backgroundColor: '#F0D5BD' }}>
-                <Image src={product.image} alt={product.name} fill className="object-cover" />
-                <button
-                  onClick={() => toggleFavorite(product.id)}
-                  className={`absolute top-2 right-2 rounded-full p-2 transition-colors ${
-                    favorites.includes(product.id.toString())
-                      ? 'bg-yellow-500 text-white'
-                      : 'bg-white/80 text-gray-600 hover:bg-white'
-                  }`}
-                >
-                  <Heart 
-                    size={16} 
-                    className={favorites.includes(product.id.toString()) ? 'fill-current' : ''} 
-                  />
-                </button>
-              </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="text-gray-400">Loading new arrivals...</div>
+          </div>
+        )}
 
-              <div className="p-4">
-                <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
-                <p className="font-bold mb-1 text-lg">{formatPrice(product.price)}</p>
-                
-                {/* Rating with number */}
-                <div className="flex items-center gap-1 mb-3">
-                  <div className="flex items-center">
-                    {renderStars(product.rating)}
+        {/* Products Grid */}
+        {!loading && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+            {newArrivals.map((product) => {
+              // Handle image format from backend
+              const mainImage =
+                Array.isArray(product.images) && product.images.length > 0
+                  ? typeof product.images[0] === "string"
+                    ? product.images[0]
+                    : product.images[0]?.url || "/placeholder.png"
+                  : "/placeholder.png";
+
+              return (
+                <div
+                  key={product.id}
+                  className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
+                  <div
+                    className="relative aspect-square"
+                    style={{ backgroundColor: "#F0D5BD" }}>
+                    <Image
+                      src={mainImage}
+                      alt={product.name}
+                      fill
+                      className="object-cover"
+                    />
+                    <button
+                      onClick={() => toggleFavorite(product.id)}
+                      className={`absolute top-2 right-2 rounded-full p-2 transition-colors ${
+                        favorites.includes(product.id)
+                          ? "bg-yellow-500 text-white"
+                          : "bg-white/80 text-gray-600 hover:bg-white"
+                      }`}>
+                      <Heart
+                        size={16}
+                        className={
+                          favorites.includes(product.id) ? "fill-current" : ""
+                        }
+                      />
+                    </button>
                   </div>
-                  <span className="text-xs text-gray-600 ml-1">{product.rating}</span>
+
+                  <div className="p-4">
+                    <h3 className="font-semibold text-sm mb-1">
+                      {product.name}
+                    </h3>
+                    <p className="font-bold mb-1 text-lg">
+                      {formatPrice(product.price)}
+                    </p>
+
+                    {/* Rating with number */}
+                    {product.averageRating !== undefined &&
+                      product.averageRating > 0 && (
+                        <div className="flex items-center gap-1 mb-3">
+                          <div className="flex items-center">
+                            {renderStars(product.averageRating)}
+                          </div>
+                          <span className="text-xs text-gray-600 ml-1">
+                            {product.averageRating}
+                          </span>
+                        </div>
+                      )}
+
+                    {/* Add to Cart Button */}
+                    <button
+                      onClick={() => addToCart(product)}
+                      disabled={!product.inStock}
+                      className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm ${
+                        product.inStock
+                          ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      }`}>
+                      <ShoppingCart size={14} />
+                      {product.inStock ? "Add to cart" : "Out of Stock"}
+                    </button>
+                  </div>
                 </div>
-                
-                {/* Add to Cart Button */}
-                <button
-                  onClick={() => addToCart(product.id)}
-                  className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm bg-yellow-600 hover:bg-yellow-700 text-white"
-                >
-                  <ShoppingCart size={14} />
-                  Add to cart
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && newArrivals.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No new arrivals available</p>
+          </div>
+        )}
       </div>
 
       {/* ===================== CURATED BY LULU ===================== */}
@@ -183,7 +204,9 @@ const Newarrival = () => {
       <section className="bg-white py-16">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-6">
-            <h2 className="text-2xl md:text-3xl font-bold mb-2">Follow Us on Instagram</h2>
+            <h2 className="text-2xl md:text-3xl font-bold mb-2">
+              Follow Us on Instagram
+            </h2>
             <p className="text-gray-600">@lulusartistry.ng</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -215,7 +238,9 @@ const Newarrival = () => {
       {/* ===================== NEWSLETTER ===================== */}
       <section className="bg-[#fff9ef] py-16">
         <div className="max-w-3xl mx-auto text-center px-6">
-          <h2 className="text-2xl md:text-3xl font-bold mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+          <h2
+            className="text-2xl md:text-3xl font-bold mb-4"
+            style={{ fontFamily: "'Playfair Display', serif" }}>
             Glow in Your Inbox
           </h2>
           <p className="text-gray-600 mb-6">
@@ -229,8 +254,7 @@ const Newarrival = () => {
             />
             <button
               type="submit"
-              className="bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-yellow-700"
-            >
+              className="bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-yellow-700">
               Subscribe
             </button>
           </form>

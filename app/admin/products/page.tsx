@@ -4,104 +4,21 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Plus, Edit, Trash2, Star, ChevronDown, X, Upload, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
-import lashbedcover from "@/assets/images/lash bed blanket.png";
-import browmappingpen from "@/assets/images/brow mapping pen.png";
-import gluestorage from "@/assets/images/Glue Storage.png";
-import browsealant from "@/assets/images/brow sealant.png";
-import onebatteryTattooMachine from "@/assets/images/One BTM.png";
-import spaTowelset from "@/assets/images/spa towel set.png";
-import rosequartz from "@/assets/images/Rose QFR.png";
-import tattooNeedles from "@/assets/images/tatoos.jpg";
-
-interface Product {
-	id: string;
-	name: string;
-	category: string;
-	price: number;
-	stock: number;
-	image: string;
-	rating: number;
-}
-
-const initialProducts: Product[] = [
-	{
-		id: "1",
-		name: "Lash Bed Blankets",
-		category: "Lashes",
-		price: 25000,
-		stock: 45,
-		image: lashbedcover.src,
-		rating: 4
-	},
-	{
-		id: "2",
-		name: "Rose Quartz Facial Roll",
-		category: "Spas",
-		price: 8500,
-		stock: 5,
-		image: rosequartz.src,
-		rating: 5
-	},
-	{
-		id: "3",
-		name: "One Battery Tattoo Machine",
-		category: "Tattoos",
-		price: 55000,
-		stock: 45,
-		image: onebatteryTattooMachine.src,
-		rating: 4
-	},
-	{
-		id: "4",
-		name: "Brow Sealant",
-		category: "Brows",
-		price: 10000,
-		stock: 17,
-		image: browsealant.src,
-		rating: 5
-	},
-	{
-		id: "5",
-		name: "Lash Glue",
-		category: "Lashes",
-		price: 15000,
-		stock: 30,
-		image: gluestorage.src,
-		rating: 4
-	},
-	{
-		id: "6",
-		name: "Spa Towel Set",
-		category: "Spas",
-		price: 18000,
-		stock: 25,
-		image: spaTowelset.src,
-		rating: 5
-	},
-	{
-		id: "7",
-		name: "Tattoo Needles",
-		category: "Tattoos",
-		price: 10000,
-		stock: 50,
-		image: tattooNeedles.src,
-		rating: 4
-	},
-	{
-		id: "8",
-		name: "Brow Mapping Pen",
-		category: "Brows",
-		price: 4500,
-		stock: 60,
-		image: browmappingpen.src,
-		rating: 5
-	}
-];
-
-const categories = ["All Categories", "Lashes", "Tattoos", "Brows", "Spas"];
+import { useProducts, Product } from "@/hooks/useProducts";
+import { useCategories } from "@/hooks/useCategories";
+import { apiClient, ApiError } from "@/lib/api/client";
 
 export default function ProductsPage() {
-	const [products, setProducts] = useState<Product[]>(initialProducts);
+	// Use hooks to fetch products and categories from backend
+	const { products: fetchedProducts, loading: productsLoading, refetch } = useProducts();
+	const { categories: fetchedCategories, loading: categoriesLoading } = useCategories({ activeOnly: true });
+	
+	// Sync hook products with local state for admin operations
+	const [products, setProducts] = useState<Product[]>([]);
+	const [loading, setLoading] = useState(true);
+	
+	// Build categories list for dropdown
+	const categories = ["All Categories", ...fetchedCategories.map(cat => cat.name)];
 	const [selectedCategory, setSelectedCategory] = useState("All Categories");
 	const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
@@ -119,6 +36,12 @@ export default function ProductsPage() {
 	});
 	const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
+	// Sync products from hook
+	useEffect(() => {
+		setProducts(fetchedProducts);
+		setLoading(productsLoading || categoriesLoading);
+	}, [fetchedProducts, productsLoading, categoriesLoading]);
+
 	// Close dropdown when clicking outside
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -133,9 +56,14 @@ export default function ProductsPage() {
 		};
 	}, []);
 
+	// Filter products by category (category is now an object)
 	const filteredProducts = selectedCategory === "All Categories"
 		? products
-		: products.filter(p => p.category === selectedCategory);
+		: products.filter(p => {
+			// Handle category as object from backend
+			const categoryName = typeof p.category === 'object' ? p.category.name : p.category;
+			return categoryName === selectedCategory;
+		});
 
 	const getStockStatus = (stock: number) => {
 		if (stock === 0) return { text: "Out of stock", color: "text-red-600" };
@@ -206,12 +134,20 @@ export default function ProductsPage() {
 
 	const openEditModal = (product: Product) => {
 		setSelectedProduct(product);
+		// Handle image format from backend
+		const productImage = Array.isArray(product.images) && product.images.length > 0
+			? (typeof product.images[0] === 'string' 
+					? product.images[0] 
+					: product.images[0]?.url || "")
+			: "";
+		// Handle category as object
+		const categoryName = typeof product.category === 'object' ? product.category.name : product.category;
 		setFormData({
 			name: product.name,
-			category: product.category,
+			category: categoryName,
 			price: product.price.toString(),
 			stock: product.stock.toString(),
-			image: product.image
+			image: productImage
 		});
 		setShowEditModal(true);
 	};
@@ -275,33 +211,50 @@ export default function ProductsPage() {
 				</div>
 			</div>
 
+			{/* Loading State */}
+			{loading && (
+				<div className="text-center py-12">
+					<div className="text-gray-400">Loading products...</div>
+				</div>
+			)}
+
 			{/* Products Grid */}
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-				{filteredProducts.map((product) => {
-					const stockStatus = getStockStatus(product.stock);
-					return (
-						<div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-							<div className="relative h-48 bg-gray-100">
-								<Image
-									src={product.image}
-									alt={product.name}
-									fill
-									className="object-cover"
-								/>
-							</div>
-							<div className="p-4">
-								<h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
-								<p className="text-lg font-bold text-gray-900 mb-2">{formatPrice(product.price)}</p>
-								<div className="flex items-center gap-1 mb-2">
-									{[...Array(5)].map((_, i) => (
-										<Star
-											key={i}
-											size={16}
-											className={i < product.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}
-										/>
-									))}
+			{!loading && (
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+					{filteredProducts.map((product) => {
+						const stockStatus = getStockStatus(product.stock);
+						// Handle image format from backend
+						const productImage = Array.isArray(product.images) && product.images.length > 0
+							? (typeof product.images[0] === 'string' 
+									? product.images[0] 
+									: product.images[0]?.url || "/placeholder-product.jpg")
+							: "/placeholder-product.jpg";
+						
+						return (
+							<div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+								<div className="relative h-48 bg-gray-100">
+									<Image
+										src={productImage}
+										alt={product.name}
+										fill
+										className="object-cover"
+									/>
 								</div>
-								<p className={`text-sm mb-4 ${stockStatus.color}`}>{stockStatus.text}</p>
+								<div className="p-4">
+									<h3 className="font-semibold text-gray-900 mb-2">{product.name}</h3>
+									<p className="text-lg font-bold text-gray-900 mb-2">{formatPrice(product.price)}</p>
+									{product.averageRating !== undefined && product.averageRating > 0 && (
+										<div className="flex items-center gap-1 mb-2">
+											{[...Array(5)].map((_, i) => (
+												<Star
+													key={i}
+													size={16}
+													className={i < Math.floor(product.averageRating || 0) ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}
+												/>
+											))}
+										</div>
+									)}
+									<p className={`text-sm mb-4 ${stockStatus.color}`}>{stockStatus.text}</p>
 								<div className="flex gap-2">
 									<button
 										onClick={() => openEditModal(product)}
@@ -317,12 +270,21 @@ export default function ProductsPage() {
 										<Trash2 size={16} />
 										Delete
 									</button>
+									</div>
 								</div>
 							</div>
-						</div>
-					);
-				})}
-			</div>
+						);
+					})}
+				</div>
+			)}
+
+			{/* Empty State */}
+			{!loading && filteredProducts.length === 0 && (
+				<div className="text-center py-12">
+					<div className="text-gray-400 mb-4">No products found</div>
+					<p className="text-gray-500">Add your first product to get started</p>
+				</div>
+			)}
 
 			{/* Add Product Modal */}
 			{showAddModal && (
@@ -369,10 +331,11 @@ export default function ProductsPage() {
 										className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
 									>
 										<option value="">Select category</option>
-										<option value="Lashes">Lashes</option>
-										<option value="Tattoos">Tattoos</option>
-										<option value="Brows">Brows</option>
-										<option value="Spas">Spas</option>
+										{fetchedCategories.map((cat) => (
+											<option key={cat.id} value={cat.name}>
+												{cat.name}
+											</option>
+										))}
 									</select>
 								</div>
 								<div>
@@ -491,10 +454,12 @@ export default function ProductsPage() {
 										onChange={(e) => setFormData({ ...formData, category: e.target.value })}
 										className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
 									>
-										<option value="Lashes">Lashes</option>
-										<option value="Tattoos">Tattoos</option>
-										<option value="Brows">Brows</option>
-										<option value="Spas">Spas</option>
+										<option value="">Select category</option>
+										{fetchedCategories.map((cat) => (
+											<option key={cat.id} value={cat.name}>
+												{cat.name}
+											</option>
+										))}
 									</select>
 								</div>
 								<div>

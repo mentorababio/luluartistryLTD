@@ -4,12 +4,17 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Heart, Star, ShoppingCart, Trash2 } from "lucide-react";
-import { products } from "@/utils/portfolioData";
 import toast from "react-hot-toast";
+import { useProducts, Product } from "@/hooks/useProducts";
 
 export default function WishlistPage() {
 	const [favorites, setFavorites] = useState<string[]>([]);
-	const [wishlistProducts, setWishlistProducts] = useState<any[]>([]);
+	
+	// Fetch all products from backend
+	const { products, loading } = useProducts();
+
+	// Filter products to show only favorited ones
+	const wishlistProducts = products.filter(p => favorites.includes(p.id));
 
 	useEffect(() => {
 		// Load favorites from localStorage
@@ -17,35 +22,43 @@ export default function WishlistPage() {
 		if (savedFavorites) {
 			const favoriteIds = JSON.parse(savedFavorites);
 			setFavorites(favoriteIds);
-			// Filter products to show only favorited ones
-			const favoriteProducts = products.filter(p => favoriteIds.includes(p.id));
-			setWishlistProducts(favoriteProducts);
 		}
 	}, []);
 
 	const removeFromWishlist = (productId: string) => {
 		const updatedFavorites = favorites.filter(id => id !== productId);
 		setFavorites(updatedFavorites);
-		setWishlistProducts(wishlistProducts.filter(p => p.id !== productId));
 		localStorage.setItem("wishlist", JSON.stringify(updatedFavorites));
+		toast.success("Removed from wishlist");
 	};
 
-	const addToCart = (productId: string) => {
-		const product = products.find(p => p.id === productId);
-		if (!product) return;
-
+	const addToCart = (product: Product) => {
 		const savedCart = localStorage.getItem("cart");
 		const cartItems = savedCart ? JSON.parse(savedCart) : [];
 		
-		const existingItem = cartItems.find((item: any) => item.id === productId);
+		const existingItem = cartItems.find((item: any) => item.id === product.id);
 		if (existingItem) {
 			existingItem.quantity = (existingItem.quantity || 1) + 1;
 		} else {
-			cartItems.push({ ...product, quantity: 1 });
+			// Convert backend product format to cart format
+			const mainImage = Array.isArray(product.images) && product.images.length > 0
+				? (typeof product.images[0] === 'string' 
+						? product.images[0] 
+						: product.images[0]?.url || "/placeholder.png")
+				: "/placeholder.png";
+			
+			cartItems.push({
+				id: product.id,
+				name: product.name,
+				price: product.price,
+				image: mainImage,
+				quantity: 1,
+				inStock: product.inStock,
+			});
 		}
 		
-    localStorage.setItem("cart", JSON.stringify(cartItems));
-    toast.success(`${product.name} added to cart!`);
+		localStorage.setItem("cart", JSON.stringify(cartItems));
+		toast.success(`${product.name} added to cart!`);
 	};
 
 	const renderStars = (rating: number) => {
@@ -80,7 +93,11 @@ export default function WishlistPage() {
 
 			{/* Content */}
 			<div className="max-w-7xl mx-auto px-6 py-16">
-				{wishlistProducts.length === 0 ? (
+				{loading ? (
+					<div className="text-center py-12">
+						<div className="text-gray-400">Loading wishlist...</div>
+					</div>
+				) : wishlistProducts.length === 0 ? (
 					<div className="text-center py-12">
 						<Heart size={64} className="mx-auto text-gray-300 mb-4" />
 						<h3 className="text-xl font-semibold text-gray-600 mb-2">
@@ -104,21 +121,29 @@ export default function WishlistPage() {
 							</p>
 						</div>
 						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-							{wishlistProducts.map((product) => (
-								<div
-									key={product.id}
-									className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
-								>
-									{/* Image Container */}
-									<div className="relative aspect-square" style={{ backgroundColor: '#F0D5BD' }}>
-										<Link href={`/product/${product.id}`}>
-											<Image
-												src={product.image}
-												alt={product.name}
-												fill
-												className="object-cover"
-											/>
-										</Link>
+							{wishlistProducts.map((product) => {
+								// Handle image format from backend
+								const mainImage = Array.isArray(product.images) && product.images.length > 0
+									? (typeof product.images[0] === 'string' 
+											? product.images[0] 
+											: product.images[0]?.url || "/placeholder.png")
+									: "/placeholder.png";
+								
+								return (
+									<div
+										key={product.id}
+										className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
+									>
+										{/* Image Container */}
+										<div className="relative aspect-square" style={{ backgroundColor: '#F0D5BD' }}>
+											<Link href={`/product/${product.id}`}>
+												<Image
+													src={mainImage}
+													alt={product.name}
+													fill
+													className="object-cover"
+												/>
+											</Link>
 										{/* Remove from Wishlist Button */}
 										<button
 											onClick={() => removeFromWishlist(product.id)}
@@ -138,30 +163,33 @@ export default function WishlistPage() {
 										</Link>
 										<p className="font-bold mb-1 text-lg">{formatPrice(product.price)}</p>
 										
-										{/* Rating */}
-										<div className="flex items-center gap-1 mb-3">
-											<div className="flex items-center">
-												{renderStars(product.rating)}
-											</div>
-											<span className="text-xs text-gray-600 ml-1">{product.rating}</span>
+											{/* Rating */}
+											{product.averageRating !== undefined && product.averageRating > 0 && (
+												<div className="flex items-center gap-1 mb-3">
+													<div className="flex items-center">
+														{renderStars(product.averageRating)}
+													</div>
+													<span className="text-xs text-gray-600 ml-1">{product.averageRating}</span>
+												</div>
+											)}
+											
+											{/* Add to Cart Button */}
+											<button
+												onClick={() => addToCart(product)}
+												disabled={!product.inStock}
+												className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm ${
+													product.inStock
+														? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+														: 'bg-gray-300 text-gray-500 cursor-not-allowed'
+												}`}
+											>
+												<ShoppingCart size={14} />
+												{product.inStock ? 'Add to cart' : 'Out of Stock'}
+											</button>
 										</div>
-										
-										{/* Add to Cart Button */}
-										<button
-											onClick={() => addToCart(product.id)}
-											disabled={!product.inStock}
-											className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm ${
-												product.inStock
-													? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-													: 'bg-gray-300 text-gray-500 cursor-not-allowed'
-											}`}
-										>
-											<ShoppingCart size={14} />
-											{product.inStock ? 'Add to cart' : 'Out of Stock'}
-										</button>
 									</div>
-								</div>
-							))}
+								);
+							})}
 						</div>
 					</>
 				)}

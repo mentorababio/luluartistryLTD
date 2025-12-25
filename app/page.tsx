@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Star, Heart, ShoppingCart } from "lucide-react";
 import toast from "react-hot-toast";
@@ -10,19 +10,9 @@ import FounderCard from "@/components/home/FounderCard";
 import Hero from "@/components/home/Hero";
 import MapSection from "@/components/common/MapSection";
 import TestimonialCarousel from "@/components/home/TestimonialCarousel";
+import { useProducts, Product } from "@/hooks/useProducts";
 
-// Import product images from assets
-import browmapping from "@/assets/images/brow mapping pen.png";
-import Dbed from "@/assets/images/DBed cover.png";
-import lashbed from "@/assets/images/lash bed.png";
-import lashblanket from "@/assets/images/lash bed blanket.png";
-import eyePatches from "@/assets/images/eye patch.png";
-import lashwash from "@/assets/images/lash wash brush.png";
-import Igone from "@/assets/images/IG1.png";
-import Igtwo from "@/assets/images/IG2.png";
-import Igthree from "@/assets/images/IG3.png";
-import moonLight from "@/assets/images/moon light tray.png";
-import stool from "@/assets/images/stool.png";
+// Import Instagram images
 import Instagram1 from "@/assets/images/testimony2.png";
 import Instagram2 from "@/assets/images/testimony1.png";
 import Instagram3 from "@/assets/images/testimony3.png";
@@ -31,48 +21,52 @@ import Instagram4 from "@/assets/images/IG4.png";
 const page = () => {
   const [favorites, setFavorites] = useState<string[]>([]);
 
-  const newArrivals = [
-    { id: 1, name: "Moon Light Ray", price: 20000, image: moonLight, rating: 4.9 },
-    { id: 2, name: "Stool", price: 40000, image: stool, rating: 4.9 },
-    { id: 3, name: "Lash Bed", price: 230000, image: lashbed, rating: 4.5 },
-    { id: 4, name: "Disposable Bed Cover", price: 24000, image: Dbed, rating: 4.8 },
-    { id: 5, name: "Eye Patches", price: 5000, image: eyePatches, rating: 4.3 },
-    { id: 6, name: "Lash Bed Blanket", price: 25000, image: lashblanket, rating: 4.7 },
-    { id: 7, name: "Brow Mapping Pen", price: 4500, image: browmapping, rating: 4.6 },
-    { id: 8, name: "Lash Wash Brush", price: 2000, image: lashwash, rating: 4.9 },
-  ];
+  // Fetch featured products (new arrivals) from backend
+  const { products: newArrivals, loading } = useProducts({
+    featured: true,
+    limit: 8, // Limit to 8 products for new arrivals section
+  });
 
-  
-  const toggleFavorite = (productId: number) => {
-    const idStr = productId.toString();
+  // Load favorites from localStorage on mount
+  useEffect(() => {
+    const savedFavorites = localStorage.getItem("wishlist");
+    if (savedFavorites) {
+      setFavorites(JSON.parse(savedFavorites));
+    }
+  }, []);
+
+  const toggleFavorite = (productId: string) => {
     setFavorites(prev => {
-      const updated = prev.includes(idStr) 
-        ? prev.filter(id => id !== idStr)
-        : [...prev, idStr];
+      const updated = prev.includes(productId) 
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId];
       localStorage.setItem("wishlist", JSON.stringify(updated));
       return updated;
     });
   };
 
-  const addToCart = (productId: number) => {
-    const product = newArrivals.find(p => p.id === productId);
-    if (!product) return;
-
+  const addToCart = (product: Product) => {
     const savedCart = localStorage.getItem("cart");
     const cartItems = savedCart ? JSON.parse(savedCart) : [];
     
-    const existingItem = cartItems.find((item: any) => item.id === productId.toString());
+    const existingItem = cartItems.find((item: any) => item.id === product.id);
     if (existingItem) {
       existingItem.quantity = (existingItem.quantity || 1) + 1;
     } else {
-      // Convert product to match cart format
+      // Convert backend product format to cart format
+      const mainImage = Array.isArray(product.images) && product.images.length > 0
+        ? (typeof product.images[0] === 'string' 
+            ? product.images[0] 
+            : product.images[0]?.url || "/placeholder.png")
+        : "/placeholder.png";
+      
       cartItems.push({ 
-        id: productId.toString(),
+        id: product.id,
         name: product.name,
         price: product.price,
-        image: product.image,
+        image: mainImage,
         quantity: 1,
-        inStock: true
+        inStock: product.inStock
       });
     }
     
@@ -112,54 +106,86 @@ const page = () => {
           <h1 className="text-3xl md:text-4xl font-bold mb-4">NEW ARRIVALS</h1>
         </div>
 
-        {/* Products Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-          {newArrivals.map((product) => (
-            <div
-              key={product.id}
-              className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
-            >
-              <div className="relative aspect-square" style={{ backgroundColor: '#F0D5BD' }}>
-                <Image src={product.image} alt={product.name} fill className="object-cover" />
-                <button
-                  onClick={() => toggleFavorite(product.id)}
-                  className={`absolute top-2 right-2 rounded-full p-2 transition-colors ${
-                    favorites.includes(product.id.toString())
-                      ? 'bg-yellow-500 text-white'
-                      : 'bg-white/80 text-gray-600 hover:bg-white'
-                  }`}
-                >
-                  <Heart 
-                    size={16} 
-                    className={favorites.includes(product.id.toString()) ? 'fill-current' : ''} 
-                  />
-                </button>
-              </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="text-gray-400">Loading new arrivals...</div>
+          </div>
+        )}
 
-              <div className="p-4">
-                <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
-                <p className="font-bold mb-1 text-lg">{formatPrice(product.price)}</p>
-                
-                {/* Rating with number */}
-                <div className="flex items-center gap-1 mb-3">
-                  <div className="flex items-center">
-                    {renderStars(product.rating)}
-                  </div>
-                  <span className="text-xs text-gray-600 ml-1">{product.rating}</span>
-                </div>
-                
-                {/* Add to Cart Button */}
-                <button
-                  onClick={() => addToCart(product.id)}
-                  className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm bg-yellow-600 hover:bg-yellow-700 text-white"
+        {/* Products Grid */}
+        {!loading && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+            {newArrivals.map((product) => {
+              // Handle image format from backend
+              const mainImage = Array.isArray(product.images) && product.images.length > 0
+                ? (typeof product.images[0] === 'string' 
+                    ? product.images[0] 
+                    : product.images[0]?.url || "/placeholder.png")
+                : "/placeholder.png";
+              
+              return (
+                <div
+                  key={product.id}
+                  className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
                 >
-                  <ShoppingCart size={14} />
-                  Add to cart
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="relative aspect-square" style={{ backgroundColor: '#F0D5BD' }}>
+                    <Image src={mainImage} alt={product.name} fill className="object-cover" />
+                    <button
+                      onClick={() => toggleFavorite(product.id)}
+                      className={`absolute top-2 right-2 rounded-full p-2 transition-colors ${
+                        favorites.includes(product.id)
+                          ? 'bg-yellow-500 text-white'
+                          : 'bg-white/80 text-gray-600 hover:bg-white'
+                      }`}
+                    >
+                      <Heart 
+                        size={16} 
+                        className={favorites.includes(product.id) ? 'fill-current' : ''} 
+                      />
+                    </button>
+                  </div>
+
+                  <div className="p-4">
+                    <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
+                    <p className="font-bold mb-1 text-lg">{formatPrice(product.price)}</p>
+                    
+                    {/* Rating with number */}
+                    {product.averageRating !== undefined && product.averageRating > 0 && (
+                      <div className="flex items-center gap-1 mb-3">
+                        <div className="flex items-center">
+                          {renderStars(product.averageRating)}
+                        </div>
+                        <span className="text-xs text-gray-600 ml-1">{product.averageRating}</span>
+                      </div>
+                    )}
+                    
+                    {/* Add to Cart Button */}
+                    <button
+                      onClick={() => addToCart(product)}
+                      disabled={!product.inStock}
+                      className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm ${
+                        product.inStock
+                          ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <ShoppingCart size={14} />
+                      {product.inStock ? 'Add to cart' : 'Out of Stock'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && newArrivals.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500">No featured products available</p>
+          </div>
+        )}
       </div>
 
       {/* ===================== TESTIMONIALS ===================== */}

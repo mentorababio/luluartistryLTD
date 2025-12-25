@@ -51,10 +51,11 @@ export const apiClient = {
     const contentType = response.headers.get("content-type");
     const isJson = contentType?.includes("application/json");
 
-    let errorData: any = {};
+    // Read response body once - it can only be read once
+    let responseData: any = {};
     if (isJson) {
       try {
-        errorData = await response.json();
+        responseData = await response.json();
       } catch {
         // If JSON parsing fails, use empty object
       }
@@ -71,20 +72,17 @@ export const apiClient = {
 
       const error: ApiError = {
         message:
-          errorData?.message ||
-          errorData?.error ||
+          responseData?.message ||
+          responseData?.error ||
           `API Error: ${response.status}`,
         status: response.status,
-        data: errorData,
+        data: responseData,
       };
       throw error;
     }
 
-    // Return parsed JSON or empty object
-    if (isJson) {
-      return await response.json();
-    }
-    return {} as T;
+    // Return parsed JSON or empty object (already read above)
+    return responseData as T;
   },
 
   // GET request
@@ -92,15 +90,30 @@ export const apiClient = {
     const url = apiClient.buildUrl(endpoint);
     const token = apiClient.getToken();
 
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-    });
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
 
-    return apiClient.handleResponse<T>(res);
+      return apiClient.handleResponse<T>(res);
+    } catch (err) {
+      // Handle network errors (CORS, connection refused, etc.)
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        const networkError: ApiError = {
+          message:
+            "Network error: Unable to connect to the server. Please check your internet connection.",
+          status: 0,
+          data: { originalError: err.message },
+        };
+        throw networkError;
+      }
+      // Re-throw other errors
+      throw err;
+    }
   },
 
   // POST request
@@ -108,16 +121,30 @@ export const apiClient = {
     const url = apiClient.buildUrl(endpoint);
     const token = apiClient.getToken();
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: JSON.stringify(data),
-    });
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(data),
+      });
 
-    return apiClient.handleResponse<T>(res);
+      return apiClient.handleResponse<T>(res);
+    } catch (err) {
+      // Handle network errors
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        const networkError: ApiError = {
+          message:
+            "Network error: Unable to connect to the server. Please check your internet connection.",
+          status: 0,
+          data: { originalError: err.message },
+        };
+        throw networkError;
+      }
+      throw err;
+    }
   },
 
   // PUT request

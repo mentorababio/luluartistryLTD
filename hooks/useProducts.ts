@@ -133,89 +133,100 @@ export function useProducts(
       return;
     }
 
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+
+    if (category && category !== "all") {
+      // Handle category name mapping (e.g., "tattoo" -> "tattoos")
+      const categoryParam = category === "tattoo" ? "tattoos" : category;
+      queryParams.append("category", categoryParam);
+    }
+
+    if (search) {
+      queryParams.append("search", search);
+    }
+
+    if (page > 1) {
+      queryParams.append("page", page.toString());
+    }
+
+    if (limit !== 12) {
+      queryParams.append("limit", limit.toString());
+    }
+
+    if (sort !== "-createdAt") {
+      queryParams.append("sort", sort);
+    }
+
+    // Determine endpoint based on options (declare outside try for error logging)
+    let endpoint = "/products";
+
+    if (featured) {
+      endpoint = "/products/featured/all";
+    } else if (queryParams.toString()) {
+      endpoint = `/products?${queryParams.toString()}`;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      // Build query parameters
-      const queryParams = new URLSearchParams();
-
-      if (category && category !== "all") {
-        // Handle category name mapping (e.g., "tattoo" -> "tattoos")
-        const categoryParam = category === "tattoo" ? "tattoos" : category;
-        queryParams.append("category", categoryParam);
-      }
-
-      if (search) {
-        queryParams.append("search", search);
-      }
-
-      if (page > 1) {
-        queryParams.append("page", page.toString());
-      }
-
-      if (limit !== 12) {
-        queryParams.append("limit", limit.toString());
-      }
-
-      if (sort !== "-createdAt") {
-        queryParams.append("sort", sort);
-      }
-
-      // Determine endpoint based on options
-      let endpoint = "/products";
-
-      if (featured) {
-        endpoint = "/products/featured";
-      } else if (queryParams.toString()) {
-        endpoint = `/products?${queryParams.toString()}`;
-      }
-
       // Backend response format:
       // {
       //   success: boolean,
-      //   count: number,
-      //   total: number,
+      //   count: number,  // Note: API returns 'count', not always 'total'
+      //   total?: number,  // Optional
       //   pagination: {},
       //   data: Product[]
       // }
       const response = await apiClient.get<{
         success: boolean;
-        count: number;
-        total: number;
-        pagination: Record<string, any>;
+        count?: number;
+        total?: number;
+        pagination?: Record<string, any>;
         data: Product[];
       }>(endpoint);
 
       // Extract products from response.data array
-      const productsList = response?.data || [];
+      const productsList = Array.isArray(response?.data) ? response?.data : [];
 
       // Build pagination info from response
-      if (response?.total !== undefined) {
+      // API returns 'count' for featured products, 'total' for paginated results
+      const totalCount =
+        response?.total ?? response?.count ?? productsList.length;
+
+      if (totalCount > 0 || productsList.length > 0) {
         setPagination({
           page,
           limit,
-          total: response.total,
-          pages: Math.ceil(response.total / limit),
+          total: totalCount,
+          pages: Math.ceil(totalCount / limit),
         });
-      } else if (productsList.length > 0) {
-        // Fallback: calculate pagination from count or data length
-        const total = response?.count || response?.total || productsList.length;
-        setPagination({
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        });
+      } else {
+        setPagination(undefined);
       }
 
       setProducts(productsList);
     } catch (err) {
-      console.error("Failed to fetch products:", err);
-      const errorMessage =
-        (err as ApiError)?.message || "Failed to load products";
+      // Extract error message for user feedback
+      let errorMessage = "Failed to load products";
+
+      if (err instanceof Error) {
+        errorMessage = err.message || errorMessage;
+      } else if (err && typeof err === "object") {
+        const apiError = err as ApiError;
+        errorMessage =
+          apiError?.message ||
+          apiError?.data?.message ||
+          apiError?.data?.error ||
+          errorMessage;
+      } else if (err) {
+        errorMessage = String(err) || errorMessage;
+      }
+
       setError(errorMessage);
       setProducts([]);
+      setPagination(undefined);
     } finally {
       setLoading(false);
     }

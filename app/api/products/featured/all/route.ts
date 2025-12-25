@@ -3,8 +3,8 @@ import { proxyRequest } from '@/lib/api/proxy';
 
 /**
  * Proxy route for featured products
- * Forwards request to backend API
+ * Forwards request to backend API /products/featured/all
  */
 export async function GET(request: NextRequest) {
-  return proxyRequest(request, '/products/featured');
+  return proxyRequest(request, '/products/featured/all');
 }

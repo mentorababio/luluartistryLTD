@@ -60,7 +60,6 @@ export async function proxyRequest(
     // Return the backend's response with the same status code
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
-    console.error("Proxy error:", error);
     return NextResponse.json(
       {
         success: false,

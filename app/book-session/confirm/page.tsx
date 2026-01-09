@@ -121,14 +121,60 @@ const ConfirmBookingPageContent = () => {
 			return;
 		}
 
-		// Navigate to success page
-		const params = new URLSearchParams({
-			...bookingData,
-			...customerData,
-			preferredContact: customerData.preferredContact || "whatsapp"
-		});
-		
-		router.push(`/book-session/success?${params.toString()}`);
+		// Try to POST booking to API (requires auth). If no token, still allow flow but warn user.
+		const doBooking = async () => {
+			try {
+				const token = localStorage.getItem('token');
+				const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+				const artistNameMap: Record<string, string> = {
+					'lulu': 'Lulu',
+					'sarah': 'Sarah Johnson',
+					'maya': 'Maya Williams'
+				};
+
+				const body = {
+					service: bookingData.service,
+					artist: { type: bookingData.artist, name: artistNameMap[bookingData.artist] || bookingData.artist },
+					location: bookingData.location,
+					appointmentDate: bookingData.date,
+					timeSlot: { start: bookingData.time, end: bookingData.time },
+					notes: ''
+				};
+
+				const res = await fetch(`${baseUrl}/bookings`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...(token ? { 'Authorization': `Bearer ${token}` } : {})
+					},
+					body: JSON.stringify(body)
+				});
+
+				if (res.status === 401) {
+					// Not authenticated — navigate to login or show message
+					toast.error('Please login to complete booking');
+					// preserve booking details in query so user can return
+					const params = new URLSearchParams({ ...bookingData, ...customerData, preferredContact: customerData.preferredContact || 'whatsapp' });
+					router.push(`/login?redirect=/book-session/confirm?${params.toString()}`);
+					return;
+				}
+
+				if (!res.ok) {
+					const json = await res.json().catch(() => ({}));
+					throw new Error(json?.message || 'Failed to create booking');
+				}
+
+				const json = await res.json();
+				// On success, navigate to success page with booking/customer details
+				const params = new URLSearchParams({ ...bookingData, ...customerData, preferredContact: customerData.preferredContact || 'whatsapp' });
+				router.push(`/book-session/success?${params.toString()}`);
+			} catch (err) {
+				console.error('Booking error', err);
+				toast.error(err instanceof Error ? err.message : 'Failed to create booking');
+			}
+		};
+
+		doBooking();
 	};
 
 	return (

@@ -8,36 +8,35 @@ export interface AdminUser {
   token?: string;
 }
 
-const ADMIN_TOKEN_KEY = 'admin_token';
-const ADMIN_USER_KEY = 'admin_user';
+const ADMIN_TOKEN_KEY = 'token';
+const ADMIN_USER_KEY = 'user';
 
 export const adminAuth = {
-  // Login - will be replaced with actual API call
+  // Login - calls API endpoint
   async login(email: string, password: string): Promise<AdminUser> {
-    // TODO: Replace with actual API call
-    // const response = await fetch('/api/admin/auth/login', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ email, password }),
-    // });
-    // const data = await response.json();
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api';
+    const response = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
     
-    // For now, simulate login (remove in production)
-    if (email && password) {
-      const user: AdminUser = {
-        id: '1',
-        email,
-        name: 'Admin User',
-        role: 'admin',
-        token: 'mock_token_' + Date.now()
-      };
-      
-      localStorage.setItem(ADMIN_TOKEN_KEY, user.token!);
-      localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(user));
-      return user;
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Login failed');
     }
     
-    throw new Error('Invalid credentials');
+    const user: AdminUser = {
+      id: data.user.id,
+      email: data.user.email,
+      name: `${data.user.firstName} ${data.user.lastName}`,
+      role: data.user.role || 'admin',
+      token: data.token,
+    };
+    
+    this.setUser(user, data.token);
+    return user;
   },
 
   // Logout

@@ -43,3 +43,4 @@ next-env.d.ts
 # documentation markdown files (keep README.md)
 ADMIN_*.md
 BACKEND_*.md
+IMPLEMENTATION_GUIDE.txt

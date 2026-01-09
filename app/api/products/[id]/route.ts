@@ -30,9 +30,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<Pr
     }
 
     const { id } = await params;
-    const body = await request.json();
+      const body = await request.json();
 
-    const updated = updateProduct(id, body);
+      const updates: any = { ...body };
+      if (body.image && !body.images) {
+        updates.images = [{ url: body.image, alt: '' }];
+      }
+
+      const updated = updateProduct(id, updates);
     if (!updated) {
       return errorResponse('Product not found', 404);
     }

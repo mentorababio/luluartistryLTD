@@ -1,5 +1,4 @@
-// Mock database layer - Replace with actual database (MongoDB, PostgreSQL, etc.)
-// This provides a simple in-memory store for demonstration
+
 
 interface User {
   id: string;
@@ -7,7 +6,7 @@ interface User {
   lastName: string;
   email: string;
   phone: string;
-  password: string; // Should be hashed in production
+  password: string; 
   role: 'user' | 'admin';
   createdAt: Date;
   updatedAt: Date;
@@ -90,6 +89,18 @@ export const db = {
   bookings: new Map<string, Booking>(),
 };
 
+// Seed a default "lashes" category with a fixed id so admin product creation
+// can use this id as the payload for lashes products.
+const seededLashesCategory: Category = {
+  id: '6930a10de7fc64e1cb800fc5',
+  name: 'lashes',
+  description: 'Lashes category',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+db.categories.set(seededLashesCategory.id, seededLashesCategory);
+
 // Utility functions for generating IDs
 export const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -142,6 +153,13 @@ export const updateCategory = (id: string, updates: Partial<Category>): Category
   const updated = { ...category, ...updates, updatedAt: new Date() };
   db.categories.set(id, updated);
   return updated;
+};
+
+export const deleteCategory = (id: string): Category | null => {
+  const category = db.categories.get(id);
+  if (!category) return null;
+  db.categories.delete(id);
+  return category;
 };
 
 // Product operations
@@ -252,6 +270,31 @@ export const createBooking = (booking: Omit<Booking, 'id' | 'createdAt' | 'updat
 
 export const getUserBookings = (userId: string): Booking[] => {
   return Array.from(db.bookings.values()).filter(b => b.userId === userId);
+};
+
+// Admin: Get all bookings with optional filters and pagination
+export const getAllBookings = (page = 1, limit = 20, status?: string, artist?: string, service?: string): { bookings: Booking[]; total: number } => {
+  let bookings = Array.from(db.bookings.values());
+
+  if (status) {
+    bookings = bookings.filter(b => b.status === status);
+  }
+
+  if (artist) {
+    bookings = bookings.filter(b => b.artist?.name === artist || b.artist?.type === artist);
+  }
+
+  if (service) {
+    bookings = bookings.filter(b => b.service === service);
+  }
+
+  bookings.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const total = bookings.length;
+  const start = (page - 1) * limit;
+  const paginated = bookings.slice(start, start + limit);
+
+  return { bookings: paginated, total };
 };
 
 export const getBookingById = (id: string): Booking | null => {

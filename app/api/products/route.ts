@@ -36,11 +36,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, price, comparePrice, category, images, variants, stock, tags, isFeatured } = body;
+    const { name, description, price, comparePrice, category, images, image, variants, stock, tags, isFeatured } = body;
 
     if (!name || !price || !category) {
       return errorResponse('Missing required fields', 400);
     }
+
+    const imagesArray = Array.isArray(images)
+      ? images
+      : image
+      ? [{ url: image, alt: '' }]
+      : [];
 
     const product = createProduct({
       name,
@@ -48,7 +54,7 @@ export async function POST(request: NextRequest) {
       price,
       comparePrice,
       category,
-      images: images || [],
+      images: imagesArray,
       variants,
       stock: stock || 0,
       tags: tags || [],

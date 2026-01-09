@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { Plus, Edit, Trash2, Star, ChevronDown, X, Upload, CheckCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Star, ChevronDown, X, Upload, CheckCircle, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import lashbedcover from "@/assets/images/lash bed blanket.png";
 import browmappingpen from "@/assets/images/brow mapping pen.png";
@@ -23,85 +23,12 @@ interface Product {
 	rating: number;
 }
 
-const initialProducts: Product[] = [
-	{
-		id: "1",
-		name: "Lash Bed Blankets",
-		category: "Lashes",
-		price: 25000,
-		stock: 45,
-		image: lashbedcover.src,
-		rating: 4
-	},
-	{
-		id: "2",
-		name: "Rose Quartz Facial Roll",
-		category: "Spas",
-		price: 8500,
-		stock: 5,
-		image: rosequartz.src,
-		rating: 5
-	},
-	{
-		id: "3",
-		name: "One Battery Tattoo Machine",
-		category: "Tattoos",
-		price: 55000,
-		stock: 45,
-		image: onebatteryTattooMachine.src,
-		rating: 4
-	},
-	{
-		id: "4",
-		name: "Brow Sealant",
-		category: "Brows",
-		price: 10000,
-		stock: 17,
-		image: browsealant.src,
-		rating: 5
-	},
-	{
-		id: "5",
-		name: "Lash Glue",
-		category: "Lashes",
-		price: 15000,
-		stock: 30,
-		image: gluestorage.src,
-		rating: 4
-	},
-	{
-		id: "6",
-		name: "Spa Towel Set",
-		category: "Spas",
-		price: 18000,
-		stock: 25,
-		image: spaTowelset.src,
-		rating: 5
-	},
-	{
-		id: "7",
-		name: "Tattoo Needles",
-		category: "Tattoos",
-		price: 10000,
-		stock: 50,
-		image: tattooNeedles.src,
-		rating: 4
-	},
-	{
-		id: "8",
-		name: "Brow Mapping Pen",
-		category: "Brows",
-		price: 4500,
-		stock: 60,
-		image: browmappingpen.src,
-		rating: 5
-	}
-];
-
 const categories = ["All Categories", "Lashes", "Tattoos", "Brows", "Spas"];
 
 export default function ProductsPage() {
-	const [products, setProducts] = useState<Product[]>(initialProducts);
+	const [products, setProducts] = useState<Product[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const [selectedCategory, setSelectedCategory] = useState("All Categories");
 	const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
@@ -110,6 +37,7 @@ export default function ProductsPage() {
 	const [showSuccessToast, setShowSuccessToast] = useState(false);
 	const [showCancelToast, setShowCancelToast] = useState(false);
 	const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [formData, setFormData] = useState({
 		name: "",
 		category: "",
@@ -117,7 +45,82 @@ export default function ProductsPage() {
 		stock: "",
 		image: ""
 	});
+	const [categoriesList, setCategoriesList] = useState<{ id: string; name: string }[]>([]);
 	const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+	// Fetch products from API on mount
+	useEffect(() => {
+		const fetchProducts = async () => {
+			try {
+				const token = localStorage.getItem('token');
+				if (!token) {
+					toast.error('Authentication required. Please login to admin dashboard.');
+					setLoading(false);
+					return;
+				}
+
+				const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+				const response = await fetch(`${baseUrl}/products?limit=100`, {
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					}
+				});
+
+				if (response.status === 401) {
+					toast.error('Session expired. Please login again.');
+					setLoading(false);
+					return;
+				}
+
+				if (!response.ok) {
+					throw new Error('Failed to fetch products');
+				}
+
+				const data = await response.json();
+				const productsData = data.data || [];
+
+				// Transform API response to Product format
+				const transformedProducts = productsData.map((product: any) => ({
+					id: product._id || product.id,
+					name: product.name,
+					category: product.category,
+					price: product.price,
+					stock: product.stock || 0,
+					image: product.image || '/placeholder-product.jpg',
+					rating: product.rating || 4
+				}));
+
+				setProducts(transformedProducts);
+				setError(null);
+			} catch (err) {
+				console.error('Error fetching products:', err);
+				setError('Failed to load products from API');
+				// Fall back to empty list instead of hardcoded data
+				setProducts([]);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchProducts();
+
+		// fetch categories for selects
+		const fetchCategories = async () => {
+			try {
+				const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+				const res = await fetch(`${baseUrl}/categories`);
+				if (!res.ok) return;
+				const json = await res.json();
+				const cats = json.data || [];
+				setCategoriesList(cats.map((c: any) => ({ id: c.id || c._id || c._id, name: c.name })));
+			} catch (err) {
+				console.error('Failed to fetch categories', err);
+			}
+		};
+
+		fetchCategories();
+	}, []);
 
 	// Close dropdown when clicking outside
 	useEffect(() => {
@@ -144,71 +147,216 @@ export default function ProductsPage() {
 		return { text: `${stock} units In stock`, color: "text-green-600" };
 	};
 
-	const handleAddProduct = () => {
+	const handleAddProduct = async () => {
 		if (!formData.name || !formData.category || !formData.price || !formData.stock) {
 			toast.error("Please fill in all required fields");
 			return;
 		}
 
-		const newProduct: Product = {
-			id: Date.now().toString(),
-			name: formData.name,
-			category: formData.category,
-			price: parseFloat(formData.price),
-			stock: parseInt(formData.stock),
-			image: formData.image || "/placeholder-product.jpg",
-			rating: 4
-		};
+		setIsSubmitting(true);
 
-		setProducts([...products, newProduct]);
-		setFormData({ name: "", category: "", price: "", stock: "", image: "" });
-		setShowAddModal(false);
-		setShowSuccessToast(true);
-		setTimeout(() => setShowSuccessToast(false), 3000);
-		toast.success("Product added successfully!");
+		try {
+			const token = localStorage.getItem('token');
+			if (!token) {
+				toast.error('Authentication required');
+				return;
+			}
+
+			const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+			const response = await fetch(`${baseUrl}/products`, {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					name: formData.name,
+					category: formData.category,
+					price: parseFloat(formData.price),
+					stock: parseInt(formData.stock),
+					image: formData.image || '/placeholder-product.jpg',
+					description: ''
+				})
+			});
+
+			if (response.status === 401) {
+				toast.error('Session expired. Please login again.');
+				return;
+			}
+
+			if (response.status === 403) {
+				toast.error('Admin access required.');
+				return;
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || 'Failed to add product');
+			}
+
+			const data = await response.json();
+			const newProduct = data.data;
+
+			setProducts([...products, {
+				id: newProduct._id,
+				name: newProduct.name,
+				category: newProduct.category,
+				price: newProduct.price,
+				stock: newProduct.stock,
+				image: newProduct.image,
+				rating: newProduct.rating || 4
+			}]);
+
+			setFormData({ name: "", category: "", price: "", stock: "", image: "" });
+			setShowAddModal(false);
+			setShowSuccessToast(true);
+			setTimeout(() => setShowSuccessToast(false), 3000);
+			toast.success("Product added successfully!");
+		} catch (err) {
+			console.error('Error adding product:', err);
+			toast.error(err instanceof Error ? err.message : "Failed to add product");
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
-	const handleEditProduct = () => {
+	const handleEditProduct = async () => {
 		if (!selectedProduct || !formData.name || !formData.category || !formData.price || !formData.stock) {
 			toast.error("Please fill in all required fields");
 			return;
 		}
 
-		setProducts(products.map(p =>
-			p.id === selectedProduct.id
-				? {
-					...p,
+		setIsSubmitting(true);
+
+		try {
+			const token = localStorage.getItem('token');
+			if (!token) {
+				toast.error('Authentication required');
+				return;
+			}
+
+			const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+			const response = await fetch(`${baseUrl}/products/${selectedProduct.id}`, {
+				method: 'PUT',
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
 					name: formData.name,
 					category: formData.category,
 					price: parseFloat(formData.price),
 					stock: parseInt(formData.stock),
-					image: formData.image || p.image
-				}
-				: p
-		));
+					image: formData.image || selectedProduct.image
+				})
+			});
 
-		setShowEditModal(false);
-		setSelectedProduct(null);
-		setFormData({ name: "", category: "", price: "", stock: "", image: "" });
-		setShowSuccessToast(true);
-		setTimeout(() => setShowSuccessToast(false), 3000);
-		toast.success("Product updated successfully!");
+			if (response.status === 401) {
+				toast.error('Session expired. Please login again.');
+				return;
+			}
+
+			if (response.status === 403) {
+				toast.error('Admin access required.');
+				return;
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || 'Failed to update product');
+			}
+
+			const data = await response.json();
+			const updatedProduct = data.data;
+
+			setProducts(products.map(p =>
+				p.id === selectedProduct.id
+					? {
+						id: updatedProduct._id,
+						name: updatedProduct.name,
+						category: updatedProduct.category,
+						price: updatedProduct.price,
+						stock: updatedProduct.stock,
+						image: updatedProduct.image,
+						rating: updatedProduct.rating || 4
+					}
+					: p
+			));
+
+			setShowEditModal(false);
+			setSelectedProduct(null);
+			setFormData({ name: "", category: "", price: "", stock: "", image: "" });
+			setShowSuccessToast(true);
+			setTimeout(() => setShowSuccessToast(false), 3000);
+			toast.success("Product updated successfully!");
+		} catch (err) {
+			console.error('Error updating product:', err);
+			toast.error(err instanceof Error ? err.message : "Failed to update product");
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
-	const handleDeleteProduct = () => {
+	const handleDeleteProduct = async () => {
 		if (!selectedProduct) return;
 
-		setProducts(products.filter(p => p.id !== selectedProduct.id));
-		setShowDeleteModal(false);
-		setSelectedProduct(null);
-		toast.success("Product deleted successfully!");
+		setIsSubmitting(true);
+
+		try {
+			const token = localStorage.getItem('token');
+			if (!token) {
+				toast.error('Authentication required');
+				return;
+			}
+
+			const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+			const response = await fetch(`${baseUrl}/products/${selectedProduct.id}`, {
+				method: 'DELETE',
+				headers: {
+					'Authorization': `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (response.status === 401) {
+				toast.error('Session expired. Please login again.');
+				return;
+			}
+
+			if (response.status === 403) {
+				toast.error('Admin access required.');
+				return;
+			}
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.message || 'Failed to delete product');
+			}
+
+			setProducts(products.filter(p => p.id !== selectedProduct.id));
+			setShowDeleteModal(false);
+			setSelectedProduct(null);
+			toast.success("Product deleted successfully!");
+		} catch (err) {
+			console.error('Error deleting product:', err);
+			toast.error(err instanceof Error ? err.message : "Failed to delete product");
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	const openEditModal = (product: Product) => {
 		setSelectedProduct(product);
+		// Resolve category value to id if possible
+		let categoryValue: string = product.category;
+		if (categoriesList.length > 0) {
+			const found = categoriesList.find(c => c.id === product.category || c.name.toLowerCase() === String(product.category).toLowerCase());
+			if (found) categoryValue = found.id;
+		}
+
 		setFormData({
 			name: product.name,
-			category: product.category,
+			category: categoryValue,
 			price: product.price.toString(),
 			stock: product.stock.toString(),
 			image: product.image
@@ -369,10 +517,9 @@ export default function ProductsPage() {
 										className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
 									>
 										<option value="">Select category</option>
-										<option value="Lashes">Lashes</option>
-										<option value="Tattoos">Tattoos</option>
-										<option value="Brows">Brows</option>
-										<option value="Spas">Spas</option>
+										{categoriesList.map(cat => (
+											<option key={cat.id} value={cat.id}>{cat.name}</option>
+										))}
 									</select>
 								</div>
 								<div>
@@ -491,10 +638,9 @@ export default function ProductsPage() {
 										onChange={(e) => setFormData({ ...formData, category: e.target.value })}
 										className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
 									>
-										<option value="Lashes">Lashes</option>
-										<option value="Tattoos">Tattoos</option>
-										<option value="Brows">Brows</option>
-										<option value="Spas">Spas</option>
+										{categoriesList.map(cat => (
+											<option key={cat.id} value={cat.id}>{cat.name}</option>
+										))}
 									</select>
 								</div>
 								<div>

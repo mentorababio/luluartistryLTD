@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse, createdResponse } from '@/lib/api/response';
 import { requireAuth, requireAdmin } from '@/lib/api/auth';
-import { getCategoryById, updateCategory, createCategory as dbCreateCategory } from '@/lib/api/db';
+import { getCategoryById, updateCategory, createCategory as dbCreateCategory, deleteCategory } from '@/lib/api/db';
 
 interface CategoriesParams {
   id: string;
@@ -40,5 +40,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<Ca
     return successResponse(updated);
   } catch (error) {
     return errorResponse('Failed to update category', 500);
+  }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<CategoriesParams> }) {
+  try {
+    const user = requireAuth(request);
+    if (!user || !requireAdmin(user)) {
+      return errorResponse('Unauthorized', 401);
+    }
+
+    const { id } = await params;
+    const deleted = deleteCategory(id);
+
+    if (!deleted) {
+      return errorResponse('Category not found', 404);
+    }
+
+    return successResponse({ message: 'Category deleted successfully' });
+  } catch (error) {
+    return errorResponse('Failed to delete category', 500);
   }
 }

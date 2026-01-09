@@ -14,108 +14,9 @@ interface Booking {
 	status: "Confirmed" | "Pending" | "Completed";
 }
 
-const bookingsData: Booking[] = [
-	{
-		id: "1",
-		clientName: "Amara Johnson",
-		service: "Microblading",
-		artist: "Lulu",
-		date: "10/15/2025",
-		time: "10:00 AM",
-		price: "₦45.0K",
-		status: "Confirmed"
-	},
-	{
-		id: "2",
-		clientName: "Chidara Okafor",
-		service: "Classic Lashes",
-		artist: "Sarah",
-		date: "10/15/2025",
-		time: "11:30 AM",
-		price: "₦25.0K",
-		status: "Confirmed"
-	},
-	{
-		id: "3",
-		clientName: "Blessing Yemi",
-		service: "Spa Facial",
-		artist: "Grace",
-		date: "10/15/2025",
-		time: "2:00 PM",
-		price: "₦15.0K",
-		status: "Pending"
-	},
-	{
-		id: "4",
-		clientName: "Zainab Hassan",
-		service: "Lip Blush Tattoo",
-		artist: "Lulu",
-		date: "10/16/2025",
-		time: "9:00 AM",
-		price: "₦55.0K",
-		status: "Completed"
-	},
-	{
-		id: "5",
-		clientName: "Fatima Ali",
-		service: "Volume Lashes",
-		artist: "Sarah",
-		date: "10/16/2025",
-		time: "11:00 AM",
-		price: "₦35.0K",
-		status: "Confirmed"
-	},
-	{
-		id: "6",
-		clientName: "Chioma Nwosu",
-		service: "Ombré Powder Brows",
-		artist: "Lulu",
-		date: "10/17/2025",
-		time: "10:00 AM",
-		price: "₦50.0K",
-		status: "Pending"
-	},
-	{
-		id: "7",
-		clientName: "Amina Bello",
-		service: "Spa Massage",
-		artist: "Grace",
-		date: "10/17/2025",
-		time: "3:00 PM",
-		price: "₦20.0K",
-		status: "Confirmed"
-	},
-	{
-		id: "8",
-		clientName: "Kemi Adeyemi",
-		service: "Tattoo Removal",
-		artist: "Lulu",
-		date: "10/18/2025",
-		time: "1:00 PM",
-		price: "₦60.0K",
-		status: "Pending"
-	},
-	{
-		id: "9",
-		clientName: "Ngozi Okoro",
-		service: "Hybrid Brows",
-		artist: "Sarah",
-		date: "10/18/2025",
-		time: "2:30 PM",
-		price: "₦48.0K",
-		status: "Completed"
-	},
-	{
-		id: "10",
-		clientName: "Halima Usman",
-		service: "Classic Lashes",
-		artist: "Grace",
-		date: "10/19/2025",
-		time: "11:00 AM",
-		price: "₦25.0K",
-		status: "Confirmed"
-	}
-];
+const bookingsData: Booking[] = [];
+
+// We'll fetch actual admin bookings from the API and populate this state below.
 
 export default function BookingsPage() {
 	const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -123,6 +24,9 @@ export default function BookingsPage() {
 	const [dateRange, setDateRange] = useState("mm/dd/yyyy");
 	const [serviceFilter, setServiceFilter] = useState("All Service");
 	const [artistFilter, setArtistFilter] = useState("All Artist");
+	const [bookings, setBookings] = useState<Booking[]>(bookingsData);
+	const [loading, setLoading] = useState<boolean>(true);
+	const [error, setError] = useState<string | null>(null);
 	const [showServiceDropdown, setShowServiceDropdown] = useState(false);
 	const [showArtistDropdown, setShowArtistDropdown] = useState(false);
 	const serviceDropdownRef = useRef<HTMLDivElement>(null);
@@ -143,6 +47,48 @@ export default function BookingsPage() {
 		return () => {
 			document.removeEventListener("mousedown", handleClickOutside);
 		};
+	}, []);
+
+	useEffect(() => {
+		// fetch admin bookings from API
+		const fetchBookings = async () => {
+			try {
+				setLoading(true);
+				const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+				const token = localStorage.getItem('token');
+				const res = await fetch(`${baseUrl}/bookings/admin/all?limit=100`, {
+					headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+				});
+				if (res.status === 401) {
+					setError('Unauthorized. Please login as admin.');
+					setBookings([]);
+					return;
+				}
+				if (!res.ok) {
+					throw new Error('Failed to fetch bookings');
+				}
+				const json = await res.json();
+				const list = json?.data?.bookings || [];
+				const mapped: Booking[] = list.map((b: any) => ({
+					id: b.id || b._id || b.id,
+					clientName: (b.userId && b.userId.firstName) ? `${b.userId.firstName} ${b.userId.lastName || ''}`.trim() : b.clientName || (b.user && b.user.name) || 'Guest',
+					service: b.service || '',
+					artist: (b.artist && (b.artist.name || b.artist.type)) || '',
+					date: b.appointmentDate || '',
+					time: (b.timeSlot && (b.timeSlot.start || '')) || '',
+					price: b.price ? `₦${b.price}` : b.price || '',
+					status: b.status || 'Pending'
+				}));
+				setBookings(mapped);
+			} catch (err) {
+				console.error('Error fetching admin bookings', err);
+				setError('Failed to load bookings');
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchBookings();
 	}, []);
 
 	const getStatusColor = (status: string) => {
@@ -276,47 +222,53 @@ export default function BookingsPage() {
 
 			{/* Appointments Table */}
 			<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-				<h2 className="text-xl font-bold text-gray-900 mb-6">All Appointments ({bookingsData.length})</h2>
+				<h2 className="text-xl font-bold text-gray-900 mb-6">All Appointments ({bookings.length})</h2>
 				<div className="overflow-x-auto">
-					<table className="w-full">
-						<thead>
-							<tr className="border-b border-gray-200">
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Client Name</th>
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Service</th>
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Artist</th>
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Time</th>
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Price</th>
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
-								<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Action</th>
-							</tr>
-						</thead>
-						<tbody>
-							{bookingsData.map((booking) => (
-								<tr key={booking.id} className="border-b border-gray-100 hover:bg-gray-50">
-									<td className="py-4 px-4 text-sm text-gray-900">{booking.clientName}</td>
-									<td className="py-4 px-4 text-sm text-gray-600">{booking.service}</td>
-									<td className="py-4 px-4 text-sm text-gray-600">{booking.artist}</td>
-									<td className="py-4 px-4 text-sm text-gray-600">{booking.date}</td>
-									<td className="py-4 px-4 text-sm text-gray-600">{booking.time}</td>
-									<td className="py-4 px-4 text-sm text-gray-900 font-semibold">{booking.price}</td>
-									<td className="py-4 px-4">
-										<span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(booking.status)}`}>
-											{booking.status}
-										</span>
-									</td>
-									<td className="py-4 px-4">
-										<button
-											onClick={() => handleViewDetails(booking)}
-											className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1 rounded-lg transition-colors"
-										>
-											View Details
-										</button>
-									</td>
+					{loading ? (
+						<p className="text-sm text-gray-600">Loading bookings...</p>
+					) : error ? (
+						<p className="text-sm text-red-600">{error}</p>
+					) : (
+						<table className="w-full">
+							<thead>
+								<tr className="border-b border-gray-200">
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Client Name</th>
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Service</th>
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Artist</th>
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Date</th>
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Time</th>
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Price</th>
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+									<th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Action</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{bookings.map((booking) => (
+									<tr key={booking.id} className="border-b border-gray-100 hover:bg-gray-50">
+										<td className="py-4 px-4 text-sm text-gray-900">{booking.clientName}</td>
+										<td className="py-4 px-4 text-sm text-gray-600">{booking.service}</td>
+										<td className="py-4 px-4 text-sm text-gray-600">{booking.artist}</td>
+										<td className="py-4 px-4 text-sm text-gray-600">{booking.date}</td>
+										<td className="py-4 px-4 text-sm text-gray-600">{booking.time}</td>
+										<td className="py-4 px-4 text-sm text-gray-900 font-semibold">{booking.price}</td>
+										<td className="py-4 px-4">
+											<span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(booking.status)}`}>
+												{booking.status}
+											</span>
+										</td>
+										<td className="py-4 px-4">
+											<button
+												onClick={() => handleViewDetails(booking)}
+												className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1 rounded-lg transition-colors"
+											>
+												View Details
+											</button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
 				</div>
 			</div>
 

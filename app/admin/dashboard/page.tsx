@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, Users, ShoppingBag, Home, Plus, X, Clock, User, DollarSign } from "lucide-react";
+import { Calendar, Users, ShoppingBag, Home, Plus, X, Clock, User, DollarSign, AlertCircle } from "lucide-react";
 import { LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import toast from "react-hot-toast";
 
 interface Appointment {
 	id: string;
@@ -14,49 +15,6 @@ interface Appointment {
 	price: string;
 	status: "Confirmed" | "Pending" | "Completed";
 }
-
-const appointmentsData: Appointment[] = [
-	{
-		id: "1",
-		clientName: "Amara John",
-		service: "Microblading",
-		artist: "Lulu",
-		date: "10/15/2025",
-		time: "10:00 AM",
-		price: "₦45.0K",
-		status: "Confirmed"
-	},
-	{
-		id: "2",
-		clientName: "Chidera Okafor",
-		service: "Classic Lashes",
-		artist: "Sarah",
-		date: "10/15/2025",
-		time: "11:30 AM",
-		price: "₦25.0K",
-		status: "Confirmed"
-	},
-	{
-		id: "3",
-		clientName: "Blessing Yemi",
-		service: "Spa Facial",
-		artist: "Grace",
-		date: "10/15/2025",
-		time: "2:00 PM",
-		price: "₦15.0K",
-		status: "Pending"
-	},
-	{
-		id: "4",
-		clientName: "Zainab Hassan",
-		service: "Lip Blush Tattoo",
-		artist: "Lulu",
-		date: "10/16/2025",
-		time: "9:00 AM",
-		price: "₦55.0K",
-		status: "Completed"
-	}
-];
 
 const bookingsTrendData = [
 	{ month: "Jan", bookings: 2 },
@@ -82,13 +40,74 @@ const salesData = [
 
 export default function AdminDashboard() {
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 	const [showModal, setShowModal] = useState(false);
+	const [appointmentsData, setAppointmentsData] = useState<Appointment[]>([]);
 
 	useEffect(() => {
-		setTimeout(() => {
-			setLoading(false);
-		}, 500);
+		const fetchBookings = async () => {
+			try {
+				const token = localStorage.getItem('token');
+				if (!token) {
+					toast.error('Authentication required. Please login to admin dashboard.');
+					setLoading(false);
+					return;
+				}
+
+				const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+				const response = await fetch(`${baseUrl}/bookings`, {
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json'
+					}
+				});
+
+				if (response.status === 401) {
+					toast.error('Session expired. Please login again.');
+					setLoading(false);
+					return;
+				}
+
+				if (response.status === 403) {
+					toast.error('Admin access required.');
+					setLoading(false);
+					return;
+				}
+
+				if (!response.ok) {
+					throw new Error('Failed to fetch bookings');
+				}
+
+				const data = await response.json();
+				const bookings = data.data || [];
+
+				// Transform API response to Appointment format
+				const transformedAppointments = bookings.map((booking: any) => ({
+					id: booking._id,
+					clientName: booking.clientName,
+					service: booking.service || 'Booking',
+					artist: booking.artist || 'TBA',
+					date: new Date(booking.date).toLocaleDateString('en-GB'),
+					time: new Date(booking.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+					price: `₦${(booking.price || 0).toLocaleString()}`,
+					status: booking.status === 'confirmed' ? 'Confirmed' : 
+							booking.status === 'pending' ? 'Pending' : 'Completed'
+				}));
+
+				setAppointmentsData(transformedAppointments);
+				setError(null);
+			} catch (err) {
+				console.error('Error fetching bookings:', err);
+				setError('Failed to load bookings');
+				// Fall back to empty data
+				setAppointmentsData([]);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchBookings();
 	}, []);
 
 	const getStatusColor = (status: string) => {
@@ -119,6 +138,15 @@ export default function AdminDashboard() {
 
 	return (
 		<div className="space-y-6">
+			{error && (
+				<div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+					<AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+					<div>
+						<h3 className="font-semibold text-red-900">Error Loading Data</h3>
+						<p className="text-sm text-red-700">{error}</p>
+					</div>
+				</div>
+			)}
 			{/* Stats Cards */}
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 				{/* Product Sales */}

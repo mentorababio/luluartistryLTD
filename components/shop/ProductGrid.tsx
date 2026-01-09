@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import Image from "next/image";
 import { Heart, Star, ShoppingCart } from "lucide-react";
-import { products } from "@/utils/portfolioData";
+import { products as demoProducts } from "@/utils/portfolioData";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -14,6 +14,7 @@ interface ProductGridProps {
 
 const ProductGridContent = ({ category, title }: ProductGridProps) => {
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [apiProducts, setApiProducts] = useState<any[]>([]);
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("search")?.toLowerCase() || "";
 
@@ -25,13 +26,64 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
     }
   }, []);
 
+  // Fetch products from API and merge with demo products (preserve demo items)
+  useEffect(() => {
+    const fetchApiProducts = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+        const res = await fetch(`${baseUrl}/products?limit=100`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const list = json?.data?.products || json?.data || [];
+
+        const transformed = list.map((p: any) => ({
+          id: p._id || p.id,
+          name: p.name,
+          description: p.description || '',
+          category: p.category,
+          price: p.price,
+          image: (p.images && p.images[0] && p.images[0].url) || p.image || '/placeholder-product.jpg',
+          rating: p.rating || 4
+        }));
+
+        setApiProducts(transformed);
+      } catch (err) {
+        // silently fail and keep demo products
+        console.error('Failed to fetch API products', err);
+      }
+    };
+
+    fetchApiProducts();
+  }, []);
+
   // Filter products by category and search query
+  // Merge demo products with API products (preserve demo items)
+  const products = (() => {
+    const demo = demoProducts || [];
+    const api = apiProducts || [];
+    const demoIds = new Set(demo.map(p => p.id));
+    const apiFiltered = api.filter(p => !demoIds.has(p.id));
+    return [...demo, ...apiFiltered];
+  })();
+
   let filteredProducts = category && category !== "all"
     ? products.filter(product => {
-        if (category === "tattoo") {
-          return product.category === "tattoos";
-        }
-        return product.category === category;
+        const productCategory = String(product.category || "").toLowerCase();
+        const filterCategory = category.toLowerCase();
+        
+        // Map category names to their ids
+        const categoryMap: Record<string, string[]> = {
+          "lashes": ["lashes", "6930a10de7fc64e1cb800fc5"],
+          "tattoo": ["tattoos", "tattoo"],
+          "tattoos": ["tattoos", "tattoo"],
+          "brows": ["brows"],
+          "spa": ["spa", "spas"],
+          "tools": ["tools"],
+          "nails": ["nails"]
+        };
+        
+        const validCategories = categoryMap[filterCategory] || [filterCategory];
+        return validCategories.some(cat => productCategory === cat.toLowerCase());
       })
     : products;
 

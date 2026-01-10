@@ -42,6 +42,9 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
           description: p.description || '',
           category: p.category,
           price: p.price,
+          stock: p.stock ?? 0,
+          inStock: p.inStock ?? ((p.stock ?? 0) > 0),
+          isLowStock: p.isLowStock ?? ((p.stock ?? 0) > 0 && (p.stock ?? 0) <= 5),
           image: (p.images && p.images[0] && p.images[0].url) || p.image || '/placeholder-product.jpg',
           rating: p.rating || 4
         }));

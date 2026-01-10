@@ -16,7 +16,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<Pr
       return errorResponse('Product not found', 404);
     }
 
-    return successResponse(product);
+    const stock = typeof (product as any).stock === 'number' ? (product as any).stock : ((product as any)?.variants ? (product as any).variants.reduce((s: number, v: any) => s + (v.stock || 0), 0) : 0);
+    const inStock = (product as any).inStock !== undefined ? (product as any).inStock : stock > 0;
+    const isLowStock = (product as any).isLowStock !== undefined ? (product as any).isLowStock : (stock > 0 && stock <= 5);
+
+    return successResponse({ ...product, stock, inStock, isLowStock });
   } catch (error) {
     return errorResponse('Failed to fetch product', 500);
   }

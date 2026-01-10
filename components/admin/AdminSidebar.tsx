@@ -11,7 +11,8 @@ import {
 	Settings,
 	Palette,
 	Menu,
-	X
+	X,
+	ShoppingCart
 } from "lucide-react";
 import { useState } from "react";
 
@@ -20,6 +21,7 @@ const menuItems = [
 	{ href: "/admin/bookings", label: "Bookings", icon: Calendar },
 	{ href: "/admin/clients", label: "Clients", icon: Users },
 	{ href: "/admin/products", label: "Products", icon: ShoppingBag },
+	{ href: "/admin/orders", label: "Orders", icon: ShoppingCart },
 	{ href: "/admin/artists", label: "Artists", icon: Palette },
 	{ href: "/admin/settings", label: "Settings", icon: Settings },
 ];
@@ -54,7 +56,7 @@ export default function AdminSidebar() {
 							<div className="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
 								<span className="text-white font-bold text-xl">L</span>
 							</div>
-							<h1 className="text-xl font-bold text-gray-900">Lulu Atistry</h1>
+							<h1 className="text-xl font-bold text-gray-900">Lulu Artistry</h1>
 						</div>
 					</div>
 
@@ -87,7 +89,10 @@ export default function AdminSidebar() {
 					{/* Footer */}
 					<div className="p-4 border-t border-gray-200">
 						<p className="text-xs text-gray-500 text-center">
-							©2025 Lulu artistry by @Oladelearis
+							©2025 Lulu artistry
+						</p>
+						<p className="text-xs text-gray-500 text-center">
+							crafted by David
 						</p>
 					</div>
 				</div>

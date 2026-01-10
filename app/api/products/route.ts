@@ -14,8 +14,16 @@ export async function GET(request: NextRequest) {
 
     const { products, total } = getAllProducts(page, limit, category || undefined, search || undefined, sort);
 
+    // normalize stock fields
+    const normalized = products.map(p => {
+      const stock = typeof p.stock === 'number' ? p.stock : (p?.variants ? p.variants.reduce((s: number, v: any) => s + (v.stock || 0), 0) : 0);
+      const inStock = (p as any).inStock !== undefined ? (p as any).inStock : stock > 0;
+      const isLowStock = (p as any).isLowStock !== undefined ? (p as any).isLowStock : (stock > 0 && stock <= 5);
+      return { ...p, stock, inStock, isLowStock };
+    });
+
     return successResponse({
-      products,
+      products: normalized,
       pagination: {
         page,
         limit,

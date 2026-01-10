@@ -14,7 +14,7 @@ export default function AdminHeader() {
 					<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
 					<input
 						type="text"
-						placeholder="Search courses, assignment..."
+						placeholder="Search..."
 						className="w-full pl-10 pr-4 py-2 bg-[#fffaf5] border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
 					/>
 				</div>

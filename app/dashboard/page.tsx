@@ -41,7 +41,7 @@ export default function DashboardPage() {
     }
 
     // Fetch user profile
-    fetch("/api/auth/me", {
+   fetch("https://luluartistry-backend.onrender.com/api/auth/me",{
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {

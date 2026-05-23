@@ -169,7 +169,7 @@ const Header = ({ onToggleMenu, isMenuOpen }: HeaderProps) => {
 				</Link>
 
 				{/* Login */}
-				<Link href='/login' className='cursor-pointer'>
+				<Link href='/dashboard' className='cursor-pointer'>
 					<Image
 						src={login}
 						alt='login'

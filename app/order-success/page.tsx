@@ -1,210 +1,220 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle, Mail, Package, RotateCcw } from "lucide-react";
+import { CheckCircle, XCircle, Package, Download } from "lucide-react";
 
 export default function OrderSuccessPage() {
-	const [orderData, setOrderData] = useState<any>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const reference = searchParams.get("reference");
 
-	useEffect(() => {
-		const savedOrder = localStorage.getItem("currentOrder");
-		if (savedOrder) {
-			setOrderData(JSON.parse(savedOrder));
-		}
-	}, []);
+  const [status, setStatus] = useState<"loading" | "success" | "failed" | "transfer">("loading");
+  const [order, setOrder] = useState<any>(null);
+  const [paymentInfo, setPaymentInfo] = useState<any>(null);
 
-	if (!orderData) {
-		return (
-			<div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
-				<div className="text-center">
-					<p className="text-gray-600">Loading order details...</p>
-					<Link href="/shop" className="text-primary-gold hover:underline mt-4 inline-block">
-						Continue Shopping
-					</Link>
-				</div>
-			</div>
-		);
-	}
+  useEffect(() => {
+    const savedOrder = localStorage.getItem("currentOrder");
+    if (savedOrder) setOrder(JSON.parse(savedOrder));
 
-	const formatPrice = (price: number) => {
-		return `₦${price.toLocaleString('en-NG')}`;
-	};
+    if (!reference) {
+      setStatus("transfer");
+      return;
+    }
 
-	const orderId = `LA-2024-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-	const orderDate = new Date().toLocaleDateString('en-US', { 
-		month: 'long', 
-		day: 'numeric', 
-		year: 'numeric' 
-	});
+    fetch(`/api/payment/verify?reference=${reference}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.data?.status === "success") {
+          setPaymentInfo(data.data);
+          setStatus("success");
+        } else {
+          setStatus("failed");
+        }
+      })
+      .catch(() => setStatus("failed"));
+  }, [reference]);
 
-	const deliveryDate = (() => {
-		const today = new Date();
-		const days = orderData.deliveryMethod === "standard" ? 4 : orderData.deliveryMethod === "express" ? 2 : 0;
-		const delivery = new Date(today);
-		delivery.setDate(today.getDate() + days);
-		return delivery.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-	})();
+  const handleDownloadReceipt = () => {
+    if (!order) return;
 
-	const shippingMethod = orderData.deliveryMethod === "standard" 
-		? "Standard shipping (3-5 business days)"
-		: orderData.deliveryMethod === "express"
-		? "Express shipping (1-2 business days)"
-		: "Store Pickup";
+    const orderId = `ORD-${order.id?.slice(0, 8).toUpperCase()}`;
+    const date = new Date().toLocaleDateString("en-NG", {
+      weekday: "long", year: "numeric", month: "long", day: "numeric",
+    });
+    const items = order.items?.map((item: any) =>
+      `  - ${item.name || item.product} x${item.quantity}  ₦${(item.price * item.quantity).toLocaleString()}`
+    ).join("\n") || "  - Items unavailable";
 
-	return (
-		<div className="min-h-screen bg-gray-100">
-			<div className="max-w-4xl mx-auto px-6 sm:px-8 py-12">
-				{/* Success Icon and Message */}
-				<div className="text-center mb-12">
-					<div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
-						<CheckCircle className="text-white" size={64} />
-					</div>
-					<h1 className="text-4xl md:text-5xl font-bold text-dark-gray mb-3">
-						Order Confirmed!
-					</h1>
-					<p className="text-xl text-gray-600">
-						Thank you for your purchase. Your beauty essentials are on their way!
-					</p>
-				</div>
+    const receipt = `
+================================================
+           LULU ARTISTRY - ORDER RECEIPT
+================================================
 
-				{/* Order Details Card */}
-				<div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-					{/* Order ID and Date */}
-					<div className="flex justify-between items-start mb-6 pb-6 border-b border-gray-200">
-						<div>
-							<h2 className="text-2xl font-bold text-dark-gray mb-2">Order #{orderId}</h2>
-							<p className="text-gray-600">Placed on {orderDate}</p>
-						</div>
-						<div className="text-right">
-							<p className="text-2xl font-bold text-primary-gold">{formatPrice(orderData.total)}</p>
-							<p className="text-sm text-gray-600">Total Amount</p>
-						</div>
-					</div>
+Date:        ${date}
+Order ID:    ${orderId}
+Status:      ${status === "success" ? "Payment Confirmed" : "Awaiting Bank Transfer"}
+${paymentInfo ? `Reference:   ${paymentInfo.reference}` : ""}
 
-					{/* Items Ordered */}
-					<div className="mb-8">
-						<h3 className="text-lg font-semibold text-dark-gray mb-4">Items Ordered</h3>
-						<div className="space-y-4">
-							{orderData.items.map((item: any) => (
-								<div key={item.id} className="flex gap-4">
-									<div className="relative w-24 h-24 flex-shrink-0 bg-gray-100 rounded-lg">
-										<Image
-											src={item.image}
-											alt={item.name}
-											fill
-											className="object-cover rounded-lg"
-										/>
-									</div>
-									<div className="flex-1">
-										<h4 className="font-semibold text-dark-gray mb-1">{item.name}</h4>
-										<p className="text-sm text-gray-600 mb-2">
-											{item.description || "Premium quality beauty product"}
-										</p>
-										<div className="flex justify-between items-center">
-											<p className="font-bold text-primary-gold">{formatPrice(item.price)}</p>
-											<p className="text-sm text-gray-600">Quantity: {item.quantity || 1}</p>
-										</div>
-									</div>
-								</div>
-							))}
-						</div>
-					</div>
+------------------------------------------------
+ITEMS ORDERED:
+${items}
 
-					{/* Delivery Information */}
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-200">
-						<div>
-							<h3 className="font-semibold text-dark-gray mb-3">Shipping Address</h3>
-							<p className="text-gray-600">
-								{orderData.fullName}<br />
-								{orderData.streetAddress}<br />
-								{orderData.city}, {orderData.state}<br />
-								{orderData.zipCode ? `${orderData.zipCode}, ` : ""}Nigeria
-							</p>
-						</div>
-						<div>
-							<h3 className="font-semibold text-dark-gray mb-3">Shipping Details</h3>
-							<p className="text-gray-600">
-								Shipping address<br />
-								{deliveryDate}<br />
-								{shippingMethod}
-							</p>
-						</div>
-					</div>
-				</div>
+------------------------------------------------
+Subtotal:    ₦${(order.totalAmount - (order.deliveryZone?.cost || 0)).toLocaleString()}
+Shipping:    ₦${(order.deliveryZone?.cost || 0).toLocaleString()}
+TOTAL:       ₦${order.totalAmount?.toLocaleString()}
 
-				{/* Account Creation Prompt */}
-				<div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-8 relative">
-					<button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-						×
-					</button>
-					<h3 className="font-semibold text-dark-gray mb-2">
-						Want to save your order history and get exclusive beauty drops?
-					</h3>
-					<p className="text-gray-600 text-sm mb-4">
-						Create an account with new-look to unlock seamless rewards, track orders, and get early access to new collections.
-					</p>
-					<div className="flex gap-4">
-						<Link
-							href="/login"
-							className="bg-primary-gold hover:bg-yellow-500 text-black font-bold py-2 px-6 rounded-lg transition-colors"
-						>
-							Create Account
-						</Link>
-						<button className="border-2 border-primary-gold text-primary-gold hover:bg-yellow-50 font-semibold py-2 px-6 rounded-lg transition-colors">
-							Maybe later
-						</button>
-					</div>
-				</div>
+------------------------------------------------
+SHIPPING ADDRESS:
+${order.shippingAddress?.street || ""}
+${order.shippingAddress?.city || ""}, ${order.shippingAddress?.state || ""}
 
-				{/* What's Next Section */}
-				<div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-					<h2 className="text-2xl font-bold text-dark-gray mb-8 text-center">What&apos;s Next?</h2>
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-						<div className="text-center">
-							<div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4">
-								<Mail className="text-primary-gold" size={32} />
-							</div>
-							<h3 className="font-semibold text-dark-gray mb-2">Order Confirmation</h3>
-							<p className="text-sm text-gray-600">
-								You&apos;ll receive an email confirmation with your order details shortly.
-							</p>
-						</div>
-						<div className="text-center">
-							<div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4">
-								<Package className="text-primary-gold" size={32} />
-							</div>
-							<h3 className="font-semibold text-dark-gray mb-2">Shipping Updates</h3>
-							<p className="text-sm text-gray-600">
-								We&apos;ll send you tracking information once your order ships.
-							</p>
-						</div>
-						<div className="text-center">
-							<div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-4">
-								<RotateCcw className="text-primary-gold" size={32} />
-							</div>
-							<h3 className="font-semibold text-dark-gray mb-2">Return Policy</h3>
-							<p className="text-sm text-gray-600">
-								<Link href="/returns" className="text-primary-gold hover:underline">
-									View our hassle-free return policy
-								</Link> for a seamless experience.
-							</p>
-						</div>
-					</div>
-				</div>
+------------------------------------------------
+CUSTOMER:
+${order.customerInfo?.firstName || ""} ${order.customerInfo?.lastName || ""}
+${order.customerInfo?.email || ""}
+${order.customerInfo?.phone || ""}
 
-				{/* Continue Shopping Button */}
-				<div className="text-center">
-					<Link
-						href="/shop"
-						className="inline-block bg-primary-gold hover:bg-yellow-500 text-black font-bold py-4 px-8 rounded-lg transition-all duration-300 transform hover:scale-105"
-					>
-						Continue Shopping
-					</Link>
-				</div>
-			</div>
-		</div>
-	);
+================================================
+  Thank you for shopping with Lulu Artistry!
+  For support: lulusartistry321@gmail.com
+================================================
+    `.trim();
+
+    const blob = new Blob([receipt], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${orderId}-receipt.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 border-4 border-[#C9A84C] border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-500 text-sm">Verifying your payment...</p>
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 max-w-md w-full text-center">
+          <XCircle size={56} className="text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Payment Failed</h1>
+          <p className="text-gray-500 mb-6">
+            Your payment could not be completed. Please try again or use bank transfer.
+          </p>
+          <Link href="/checkout">
+            <button className="w-full bg-[#C9A84C] text-white font-semibold py-3 rounded-lg hover:bg-yellow-600 transition-colors">
+              Try Again
+            </button>
+          </Link>
+          <Link href="/">
+            <button className="w-full mt-3 border border-gray-200 text-gray-600 font-medium py-3 rounded-lg hover:bg-gray-50 transition-colors">
+              Back to Home
+            </button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center px-4 py-12">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 max-w-md w-full text-center">
+
+        {/* Icon */}
+        <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+          <CheckCircle size={48} className="text-green-500" />
+        </div>
+
+        {/* Title */}
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">
+          {status === "transfer" ? "Order Placed!" : "Payment Successful!"}
+        </h1>
+        <p className="text-gray-500 mb-6">
+          {status === "transfer"
+            ? "Your order has been placed. Please complete your bank transfer to confirm."
+            : "Your payment was successful and your order is confirmed!"}
+        </p>
+
+        {/* Order Info */}
+        {order && (
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Order ID</span>
+              <span className="font-semibold text-gray-800">
+                ORD-{order.id?.slice(0, 8).toUpperCase()}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Total</span>
+              <span className="font-semibold text-gray-800">
+                ₦{order.totalAmount?.toLocaleString()}
+              </span>
+            </div>
+            {paymentInfo && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Reference</span>
+                <span className="font-semibold text-gray-800 text-xs">
+                  {paymentInfo.reference}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Status</span>
+              <span className={`font-semibold capitalize ${
+                status === "success" ? "text-green-600" : "text-orange-500"
+              }`}>
+                {status === "transfer" ? "Awaiting Payment" : "Confirmed"}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Bank Transfer Details */}
+        {status === "transfer" && (
+          <div className="bg-yellow-50 border border-[#C9A84C] rounded-xl p-4 mb-6 text-left">
+            <p className="text-sm font-semibold text-gray-700 mb-2">Transfer to:</p>
+            <p className="text-sm text-gray-600">Bank: <span className="font-medium">GTBank</span></p>
+            <p className="text-sm text-gray-600">Account: <span className="font-medium">0123456789</span></p>
+            <p className="text-sm text-gray-600">Name: <span className="font-medium">Lulu Artistry</span></p>
+            <p className="text-sm text-gray-600 mt-2">
+              Amount: <span className="font-bold text-[#C9A84C]">₦{order?.totalAmount?.toLocaleString()}</span>
+            </p>
+          </div>
+        )}
+
+        {/* Buttons */}
+        <Link href="/orders">
+          <button className="w-full bg-[#C9A84C] text-white font-semibold py-3 rounded-lg hover:bg-yellow-600 transition-colors flex items-center justify-center gap-2">
+            <Package size={16} />
+            Track My Order
+          </button>
+        </Link>
+
+        <button
+          onClick={handleDownloadReceipt}
+          className="w-full mt-3 border border-[#C9A84C] text-[#C9A84C] font-medium py-3 rounded-lg hover:bg-[#C9A84C] hover:text-white transition-colors flex items-center justify-center gap-2"
+        >
+          <Download size={16} />
+          Download Receipt
+        </button>
+
+        <Link href="/shop">
+          <button className="w-full mt-3 border border-gray-200 text-gray-600 font-medium py-3 rounded-lg hover:bg-gray-50 transition-colors">
+            Continue Shopping
+          </button>
+        </Link>
+      </div>
+    </div>
+  );
 }
-

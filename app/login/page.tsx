@@ -50,7 +50,7 @@ export default function LoginPage() {
 					localStorage.setItem('token', data.data.token);
 				}
 				toast.success('Login successful');
-				router.push('/');
+				router.push('/dashboard');
 			} catch (err) {
 				toast.error('Network error during login');
 			}

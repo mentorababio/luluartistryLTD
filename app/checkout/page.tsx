@@ -11,7 +11,7 @@ import { apiClient } from "@/lib/api/client";
 export default function CheckoutPage() {
 	const router = useRouter();
 	const [cartItems, setCartItems] = useState<any[]>([]);
-	const [currentStep, setCurrentStep] = useState(2); // 1: Delivery Info, 2: Payment, 3: Review (Payment is current step)
+	const [currentStep, setCurrentStep] = useState(2);
 	
 	const [customerData, setCustomerData] = useState({
 		fullName: "",
@@ -28,16 +28,13 @@ export default function CheckoutPage() {
 	const [rememberInfo, setRememberInfo] = useState(false);
 	const [agreeToTerms, setAgreeToTerms] = useState(false);
 	const [promoCode, setPromoCode] = useState("");
-
 	const [paymentData, setPaymentData] = useState({
 		cardNumber: "",
 		expiryDate: "",
 		cvv: "",
 		cardholderName: ""
 	});
-
 	const [isProcessing, setIsProcessing] = useState(false);
-
 	const [bankDetails, setBankDetails] = useState({
 		bankName: "Lulu Artistry LTD - GTBank",
 		accountNumber: "0123456789",
@@ -51,7 +48,6 @@ export default function CheckoutPage() {
 			const items = JSON.parse(savedCart);
 			setCartItems(items);
 		} else {
-			// Redirect to cart if empty
 			router.push("/cart");
 		}
 	}, [router]);
@@ -64,14 +60,10 @@ export default function CheckoutPage() {
 
 	const getShippingCost = () => {
 		switch (deliveryMethod) {
-			case "standard":
-				return 1200;
-			case "express":
-				return 2500;
-			case "pickup":
-				return 0;
-			default:
-				return 1200;
+			case "standard": return 1200;
+			case "express": return 2500;
+			case "pickup": return 0;
+			default: return 1200;
 		}
 	};
 
@@ -96,107 +88,124 @@ export default function CheckoutPage() {
 		toast.success(`${label} copied to clipboard!`);
 	};
 
+	// ── Paystack handleProceed ─────────────────────────────────────────────────
 	const handleProceed = async () => {
-		if (!customerData.fullName || !customerData.email || !customerData.phone || !customerData.streetAddress || !customerData.city || !customerData.state) {
-			toast.error("Please fill in all required customer details");
+		if (
+			!customerData.fullName ||
+			!customerData.email ||
+			!customerData.phone ||
+			!customerData.streetAddress ||
+			!customerData.city ||
+			!customerData.state
+		) {
+			toast.error('Please fill in all required customer details');
 			return;
 		}
 
-		if (paymentMethod === "card") {
-			if (!paymentData.cardNumber || !paymentData.expiryDate || !paymentData.cvv || !paymentData.cardholderName) {
-				toast.error("Please fill in all payment details");
-				return;
-			}
-		}
-
 		if (!agreeToTerms) {
-			toast.error("Please agree to the terms & conditions");
+			toast.error('Please agree to the terms & conditions');
 			return;
 		}
 
 		setIsProcessing(true);
 
 		try {
-			// Parse customer name into first and last name
 			const nameParts = customerData.fullName.trim().split(' ');
 			const firstName = nameParts[0] || '';
 			const lastName = nameParts.slice(1).join(' ') || '';
 
-			// Prepare order data for API
+			// Step 1: Create the order in the database
 			const orderPayload = {
-				items: cartItems.map(item => ({
+				items: cartItems.map((item) => ({
 					product: item.id,
 					quantity: item.quantity || 1,
 					price: item.price,
-					variant: item.variant
+					variant: item.variant,
 				})),
 				customerInfo: {
 					firstName,
 					lastName,
 					email: customerData.email,
-					phone: customerData.phone
+					phone: customerData.phone,
 				},
 				shippingAddress: {
 					street: customerData.streetAddress,
 					city: customerData.city,
 					state: customerData.state,
-					landmark: ''
+					landmark: '',
 				},
 				deliveryZone: {
 					zone: customerData.state,
-					cost: getShippingCost()
+					cost: getShippingCost(),
 				},
 				paymentMethod: paymentMethod === 'card' ? 'paystack' : 'bank_transfer',
-				notes: ''
+				notes: '',
 			};
 
-			// Create order via API
 			const response = await apiClient.post<any>('/orders', orderPayload);
+			if (!response.data) throw new Error('Failed to create order');
 
-			if (!response.data) {
-				throw new Error('Failed to create order');
+			const order = response.data;
+
+			// Save order to localStorage for reference on success page
+			localStorage.setItem('currentOrder', JSON.stringify(order));
+			localStorage.removeItem('cart');
+
+			// Step 2: Bank transfer — go straight to success page
+			if (paymentMethod === 'transfer') {
+				toast.success('Order placed! Please complete your bank transfer.');
+				router.push('/order-success');
+				return;
 			}
 
-			// Save order for reference
-			localStorage.setItem("currentOrder", JSON.stringify(response.data));
-			localStorage.removeItem("cart");
+			// Step 3: Card payment — initialize Paystack
+			const token = localStorage.getItem('token');
+			const payRes = await fetch('/api/payment/initialize', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				body: JSON.stringify({
+					email: customerData.email,
+					amount: calculateTotal(),
+					orderId: order.id,
+					callbackUrl: `${window.location.origin}/order-success`,
+				}),
+			});
 
-			toast.success('Order created successfully!');
+			const payData = await payRes.json();
 
-			// Redirect to Paystack payment or success
-			if (paymentMethod === 'card') {
-				// If Paystack is implemented, redirect to payment
-				// For now, redirect to success
-				router.push("/order-success");
-			} else {
-				router.push("/order-success");
+			if (!payRes.ok || !payData.data?.authorizationUrl) {
+				throw new Error(payData.message || 'Failed to initialize payment');
 			}
+
+			// Step 4: Redirect to Paystack payment page
+			window.location.href = payData.data.authorizationUrl;
 		} catch (error: any) {
-			console.error('Order creation failed:', error);
-			toast.error(error?.message || 'Failed to create order. Please try again.');
-		} finally {
+			console.error('Checkout failed:', error);
+			toast.error(error?.message || 'Something went wrong. Please try again.');
 			setIsProcessing(false);
 		}
 	};
+	// ── end handleProceed ──────────────────────────────────────────────────────
 
 	const addToCart = (product: any) => {
 		const savedCart = localStorage.getItem("cart");
 		const cartItems = savedCart ? JSON.parse(savedCart) : [];
-		
 		const existingItem = cartItems.find((item: any) => item.id === product.id);
 		if (existingItem) {
 			existingItem.quantity = (existingItem.quantity || 1) + 1;
 		} else {
 			cartItems.push({ ...product, quantity: 1 });
 		}
-		
 		localStorage.setItem("cart", JSON.stringify(cartItems));
 		toast.success(`${product.name} added to cart!`);
 		setCartItems(JSON.parse(localStorage.getItem("cart") || "[]"));
 	};
 
 	if (cartItems.length === 0) {
-		return null; // Will redirect
+		return null;
 	}
 
 	return (
@@ -205,50 +214,25 @@ export default function CheckoutPage() {
 				{/* Progress Indicator */}
 				<div className="mb-12">
 					<div className="flex items-center justify-center">
-						{/* Step 1: Delivery Info */}
 						<div className="flex items-center">
-							<div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold ${
-								currentStep >= 1 ? "bg-primary-gold text-white" : "bg-gray-300 text-gray-600"
-							}`}>
-								1
-							</div>
-							<span className={`ml-3 font-medium ${currentStep >= 1 ? "text-primary-gold" : "text-gray-600"}`}>
-								Delivery Info
-							</span>
+							<div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold ${currentStep >= 1 ? "bg-primary-gold text-white" : "bg-gray-300 text-gray-600"}`}>1</div>
+							<span className={`ml-3 font-medium ${currentStep >= 1 ? "text-primary-gold" : "text-gray-600"}`}>Delivery Info</span>
 						</div>
-						
 						<div className={`h-1 w-32 mx-4 ${currentStep >= 2 ? "bg-primary-gold" : "bg-gray-300"}`}></div>
-						
-						{/* Step 2: Payment */}
 						<div className="flex items-center">
-							<div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold ${
-								currentStep >= 2 ? "bg-primary-gold text-white" : "bg-gray-300 text-gray-600"
-							}`}>
-								2
-							</div>
-							<span className={`ml-3 font-medium ${currentStep >= 2 ? "text-primary-gold" : "text-gray-600"}`}>
-								Payment
-							</span>
+							<div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold ${currentStep >= 2 ? "bg-primary-gold text-white" : "bg-gray-300 text-gray-600"}`}>2</div>
+							<span className={`ml-3 font-medium ${currentStep >= 2 ? "text-primary-gold" : "text-gray-600"}`}>Payment</span>
 						</div>
-						
 						<div className={`h-1 w-32 mx-4 ${currentStep >= 3 ? "bg-primary-gold" : "bg-gray-300"}`}></div>
-						
-						{/* Step 3: Review & confirm */}
 						<div className="flex items-center">
-							<div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold ${
-								currentStep >= 3 ? "bg-primary-gold text-white" : "bg-gray-300 text-gray-600"
-							}`}>
-								3
-							</div>
-							<span className={`ml-3 font-medium ${currentStep >= 3 ? "text-primary-gold" : "text-gray-600"}`}>
-								Review & confirm
-							</span>
+							<div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold ${currentStep >= 3 ? "bg-primary-gold text-white" : "bg-gray-300 text-gray-600"}`}>3</div>
+							<span className={`ml-3 font-medium ${currentStep >= 3 ? "text-primary-gold" : "text-gray-600"}`}>Review & confirm</span>
 						</div>
 					</div>
 				</div>
 
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-					{/* Left Column - Main Content */}
+					{/* Left Column */}
 					<div className="lg:col-span-2 space-y-6">
 						{/* Customer Details */}
 						<div className="bg-white rounded-lg shadow-sm p-6">
@@ -259,79 +243,31 @@ export default function CheckoutPage() {
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
-									<input
-										type="text"
-										value={customerData.fullName}
-										onChange={(e) => setCustomerData({ ...customerData, fullName: e.target.value })}
-										placeholder="Enter your name"
-										className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-										required
-									/>
+									<input type="text" value={customerData.fullName} onChange={(e) => setCustomerData({ ...customerData, fullName: e.target.value })} placeholder="Enter your name" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" required />
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
-									<input
-										type="email"
-										value={customerData.email}
-										onChange={(e) => setCustomerData({ ...customerData, email: e.target.value })}
-										placeholder="Enter email"
-										className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-										required
-									/>
+									<input type="email" value={customerData.email} onChange={(e) => setCustomerData({ ...customerData, email: e.target.value })} placeholder="Enter email" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" required />
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
-									<input
-										type="tel"
-										value={customerData.phone}
-										onChange={(e) => setCustomerData({ ...customerData, phone: e.target.value })}
-										placeholder="Enter phone number"
-										className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-										required
-									/>
+									<input type="tel" value={customerData.phone} onChange={(e) => setCustomerData({ ...customerData, phone: e.target.value })} placeholder="Enter phone number" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" required />
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">Street Address *</label>
-									<input
-										type="text"
-										value={customerData.streetAddress}
-										onChange={(e) => setCustomerData({ ...customerData, streetAddress: e.target.value })}
-										placeholder="Enter street address"
-										className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-										required
-									/>
+									<input type="text" value={customerData.streetAddress} onChange={(e) => setCustomerData({ ...customerData, streetAddress: e.target.value })} placeholder="Enter street address" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" required />
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">City *</label>
-									<input
-										type="text"
-										value={customerData.city}
-										onChange={(e) => setCustomerData({ ...customerData, city: e.target.value })}
-										placeholder="Enter city"
-										className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-										required
-									/>
+									<input type="text" value={customerData.city} onChange={(e) => setCustomerData({ ...customerData, city: e.target.value })} placeholder="Enter city" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" required />
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">State *</label>
-									<input
-										type="text"
-										value={customerData.state}
-										onChange={(e) => setCustomerData({ ...customerData, state: e.target.value })}
-										placeholder="Enter state"
-										className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-										required
-									/>
+									<input type="text" value={customerData.state} onChange={(e) => setCustomerData({ ...customerData, state: e.target.value })} placeholder="Enter state" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" required />
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-700 mb-2">Zip/Postcode (Optional)</label>
-									<input
-										type="text"
-										value={customerData.zipCode}
-										onChange={(e) => setCustomerData({ ...customerData, zipCode: e.target.value })}
-										placeholder="Enter zip/postcode"
-										className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-									/>
+									<input type="text" value={customerData.zipCode} onChange={(e) => setCustomerData({ ...customerData, zipCode: e.target.value })} placeholder="Enter zip/postcode" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" />
 								</div>
 							</div>
 						</div>
@@ -343,18 +279,8 @@ export default function CheckoutPage() {
 								<h2 className="text-xl font-bold text-dark-gray">Delivery Method</h2>
 							</div>
 							<div className="space-y-4">
-								{/* Standard Delivery */}
-								<label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-									deliveryMethod === "standard" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"
-								}`}>
-									<input
-										type="radio"
-										name="delivery"
-										value="standard"
-										checked={deliveryMethod === "standard"}
-										onChange={(e) => setDeliveryMethod(e.target.value)}
-										className="w-5 h-5 text-primary-gold focus:ring-primary-gold"
-									/>
+								<label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${deliveryMethod === "standard" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
+									<input type="radio" name="delivery" value="standard" checked={deliveryMethod === "standard"} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-5 h-5 text-primary-gold focus:ring-primary-gold" />
 									<div className="ml-4 flex-1">
 										<div className="flex justify-between items-start">
 											<div>
@@ -366,19 +292,8 @@ export default function CheckoutPage() {
 										</div>
 									</div>
 								</label>
-
-								{/* Express Delivery */}
-								<label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-									deliveryMethod === "express" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"
-								}`}>
-									<input
-										type="radio"
-										name="delivery"
-										value="express"
-										checked={deliveryMethod === "express"}
-										onChange={(e) => setDeliveryMethod(e.target.value)}
-										className="w-5 h-5 text-primary-gold focus:ring-primary-gold"
-									/>
+								<label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${deliveryMethod === "express" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
+									<input type="radio" name="delivery" value="express" checked={deliveryMethod === "express"} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-5 h-5 text-primary-gold focus:ring-primary-gold" />
 									<div className="ml-4 flex-1">
 										<div className="flex justify-between items-start">
 											<div>
@@ -390,19 +305,8 @@ export default function CheckoutPage() {
 										</div>
 									</div>
 								</label>
-
-								{/* Pickup */}
-								<label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-									deliveryMethod === "pickup" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"
-								}`}>
-									<input
-										type="radio"
-										name="delivery"
-										value="pickup"
-										checked={deliveryMethod === "pickup"}
-										onChange={(e) => setDeliveryMethod(e.target.value)}
-										className="w-5 h-5 text-primary-gold focus:ring-primary-gold"
-									/>
+								<label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${deliveryMethod === "pickup" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
+									<input type="radio" name="delivery" value="pickup" checked={deliveryMethod === "pickup"} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-5 h-5 text-primary-gold focus:ring-primary-gold" />
 									<div className="ml-4 flex-1">
 										<div className="flex justify-between items-start">
 											<div>
@@ -423,87 +327,27 @@ export default function CheckoutPage() {
 								<h2 className="text-xl font-bold text-dark-gray">Payment Method</h2>
 							</div>
 							<div className="space-y-4">
-								{/* Paystack/Flutterwave Card */}
-								<label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${
-									paymentMethod === "card" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"
-								}`}>
-									<input
-										type="radio"
-										name="payment"
-										value="card"
-										checked={paymentMethod === "card"}
-										onChange={(e) => setPaymentMethod(e.target.value)}
-										className="w-5 h-5 text-primary-gold focus:ring-primary-gold mt-1"
-									/>
+								{/* Paystack */}
+								<label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "card" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
+									<input type="radio" name="payment" value="card" checked={paymentMethod === "card"} onChange={(e) => setPaymentMethod(e.target.value)} className="w-5 h-5 text-primary-gold focus:ring-primary-gold mt-1" />
 									<div className="ml-4 flex-1">
 										<div>
 											<p className="font-semibold text-dark-gray">Paystack/Flutterwave (Debit/Credit Card)</p>
 											<p className="text-sm text-gray-600">Debit/Credit Card</p>
 										</div>
 										{paymentMethod === "card" && (
-											<div className="mt-4 space-y-4">
-												<div>
-													<label className="block text-sm font-medium text-gray-700 mb-2">Card Number</label>
-													<input
-														type="text"
-														value={paymentData.cardNumber}
-														onChange={(e) => setPaymentData({ ...paymentData, cardNumber: e.target.value })}
-														placeholder="0000 0000 0000 0000"
-														maxLength={19}
-														className="w-full px-4 py-3 border-2 border-primary-gold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold"
-													/>
-												</div>
-												<div className="grid grid-cols-2 gap-4">
-													<div>
-														<label className="block text-sm font-medium text-gray-700 mb-2">Expiry Date</label>
-														<input
-															type="text"
-															value={paymentData.expiryDate}
-															onChange={(e) => setPaymentData({ ...paymentData, expiryDate: e.target.value })}
-															placeholder="MM/YY"
-															maxLength={5}
-															className="w-full px-4 py-3 border-2 border-primary-gold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold"
-														/>
-													</div>
-													<div>
-														<label className="block text-sm font-medium text-gray-700 mb-2">CVV</label>
-														<input
-															type="text"
-															value={paymentData.cvv}
-															onChange={(e) => setPaymentData({ ...paymentData, cvv: e.target.value })}
-															placeholder="000"
-															maxLength={4}
-															className="w-full px-4 py-3 border-2 border-primary-gold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold"
-														/>
-													</div>
-												</div>
-												<div>
-													<label className="block text-sm font-medium text-gray-700 mb-2">Cardholder Name</label>
-													<input
-														type="text"
-														value={paymentData.cardholderName}
-														onChange={(e) => setPaymentData({ ...paymentData, cardholderName: e.target.value })}
-														placeholder="Enter name as it appears on card"
-														className="w-full px-4 py-3 border-2 border-primary-gold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold"
-													/>
-												</div>
+											<div className="mt-3 p-3 bg-blue-50 rounded-lg">
+												<p className="text-sm text-blue-700 font-medium">
+													🔒 You will be redirected to Paystack's secure payment page to complete your payment.
+												</p>
 											</div>
 										)}
 									</div>
 								</label>
 
 								{/* Bank Transfer */}
-								<label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${
-									paymentMethod === "transfer" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"
-								}`}>
-									<input
-										type="radio"
-										name="payment"
-										value="transfer"
-										checked={paymentMethod === "transfer"}
-										onChange={(e) => setPaymentMethod(e.target.value)}
-										className="w-5 h-5 text-primary-gold focus:ring-primary-gold mt-1"
-									/>
+								<label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "transfer" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
+									<input type="radio" name="payment" value="transfer" checked={paymentMethod === "transfer"} onChange={(e) => setPaymentMethod(e.target.value)} className="w-5 h-5 text-primary-gold focus:ring-primary-gold mt-1" />
 									<div className="ml-4 flex-1">
 										<div>
 											<p className="font-semibold text-dark-gray">Bank Transfer</p>
@@ -516,56 +360,32 @@ export default function CheckoutPage() {
 														<p className="text-xs text-gray-600">Bank Name</p>
 														<p className="font-semibold">{bankDetails.bankName}</p>
 													</div>
-													<button
-														onClick={() => copyToClipboard(bankDetails.bankName, "Bank name")}
-														className="p-2 hover:bg-gray-200 rounded"
-													>
-														<Copy size={16} />
-													</button>
+													<button onClick={() => copyToClipboard(bankDetails.bankName, "Bank name")} className="p-2 hover:bg-gray-200 rounded"><Copy size={16} /></button>
 												</div>
 												<div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
 													<div>
 														<p className="text-xs text-gray-600">Account Number</p>
 														<p className="font-semibold">{bankDetails.accountNumber}</p>
 													</div>
-													<button
-														onClick={() => copyToClipboard(bankDetails.accountNumber, "Account number")}
-														className="p-2 hover:bg-gray-200 rounded"
-													>
-														<Copy size={16} />
-													</button>
+													<button onClick={() => copyToClipboard(bankDetails.accountNumber, "Account number")} className="p-2 hover:bg-gray-200 rounded"><Copy size={16} /></button>
 												</div>
 												<div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
 													<div>
 														<p className="text-xs text-gray-600">Account Name</p>
 														<p className="font-semibold">{bankDetails.accountName}</p>
 													</div>
-													<button
-														onClick={() => copyToClipboard(bankDetails.accountName, "Account name")}
-														className="p-2 hover:bg-gray-200 rounded"
-													>
-														<Copy size={16} />
-													</button>
+													<button onClick={() => copyToClipboard(bankDetails.accountName, "Account name")} className="p-2 hover:bg-gray-200 rounded"><Copy size={16} /></button>
 												</div>
 												<div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border-2 border-primary-gold">
 													<div>
 														<p className="text-xs text-gray-600">Amount to Transfer</p>
 														<p className="font-bold text-primary-gold text-lg">{formatPrice(calculateTotal())}</p>
 													</div>
-													<button
-														onClick={() => copyToClipboard(formatPrice(calculateTotal()), "Amount")}
-														className="p-2 hover:bg-yellow-100 rounded"
-													>
-														<Copy size={16} />
-													</button>
+													<button onClick={() => copyToClipboard(formatPrice(calculateTotal()), "Amount")} className="p-2 hover:bg-yellow-100 rounded"><Copy size={16} /></button>
 												</div>
 												<div>
 													<label className="block text-sm font-medium text-gray-700 mb-2">Select your bank</label>
-													<select
-														value={bankDetails.selectedBank}
-														onChange={(e) => setBankDetails({ ...bankDetails, selectedBank: e.target.value })}
-														className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-													>
+													<select value={bankDetails.selectedBank} onChange={(e) => setBankDetails({ ...bankDetails, selectedBank: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent">
 														<option value="">Select your bank</option>
 														<option value="gtb">GTBank</option>
 														<option value="access">Access Bank</option>
@@ -586,22 +406,13 @@ export default function CheckoutPage() {
 							<button
 								onClick={handleProceed}
 								disabled={isProcessing}
-								className={`w-full font-bold py-4 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${
-									isProcessing
-										? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-										: 'bg-primary-gold hover:bg-yellow-500 text-black'
-								}`}
+								className={`w-full font-bold py-4 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${isProcessing ? 'bg-gray-400 text-gray-600 cursor-not-allowed' : 'bg-primary-gold hover:bg-yellow-500 text-black'}`}
 							>
 								{isProcessing && <Loader className="w-4 h-4 animate-spin" />}
-								{isProcessing ? 'Processing...' : 'Proceed'}
+								{isProcessing ? 'Processing...' : paymentMethod === 'card' ? 'Proceed to Payment' : 'Place Order'}
 							</button>
 							<label className="flex items-center gap-2 mt-4 text-sm text-gray-600">
-								<input
-									type="checkbox"
-									checked={agreeToTerms}
-									onChange={(e) => setAgreeToTerms(e.target.checked)}
-									className="w-4 h-4 text-primary-gold focus:ring-primary-gold rounded"
-								/>
+								<input type="checkbox" checked={agreeToTerms} onChange={(e) => setAgreeToTerms(e.target.checked)} className="w-4 h-4 text-primary-gold focus:ring-primary-gold rounded" />
 								<span>
 									I agree to the{" "}
 									<Link href="/terms" className="underline text-primary-gold">terms & conditions</Link>
@@ -616,18 +427,11 @@ export default function CheckoutPage() {
 					<div className="lg:col-span-1">
 						<div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
 							<h2 className="text-xl font-bold text-dark-gray mb-6">Order Summary</h2>
-							
-							{/* Cart Items */}
 							<div className="space-y-4 mb-6">
 								{cartItems.map((item) => (
 									<div key={item.id} className="flex gap-3">
 										<div className="relative w-16 h-16 flex-shrink-0 bg-gray-100 rounded">
-											<Image
-												src={item.image}
-												alt={item.name}
-												fill
-												className="object-cover rounded"
-											/>
+											<Image src={item.image} alt={item.name} fill className="object-cover rounded" />
 										</div>
 										<div className="flex-1">
 											<p className="font-semibold text-sm text-dark-gray">{item.name}</p>
@@ -637,25 +441,13 @@ export default function CheckoutPage() {
 									</div>
 								))}
 							</div>
-
-							{/* Promo Code */}
 							<div className="mb-6">
 								<label className="block text-sm font-medium text-gray-700 mb-2">Promo code/optional</label>
 								<div className="flex gap-2">
-									<input
-										type="text"
-										value={promoCode}
-										onChange={(e) => setPromoCode(e.target.value)}
-										placeholder="Enter promo code"
-										className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-									/>
-									<button className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-semibold transition-colors">
-										Apply
-									</button>
+									<input type="text" value={promoCode} onChange={(e) => setPromoCode(e.target.value)} placeholder="Enter promo code" className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent" />
+									<button className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-semibold transition-colors">Apply</button>
 								</div>
 							</div>
-
-							{/* Price Breakdown */}
 							<div className="space-y-3 mb-6 pb-6 border-b border-gray-200">
 								<div className="flex justify-between">
 									<span className="text-gray-600">Subtotal:</span>
@@ -670,15 +462,8 @@ export default function CheckoutPage() {
 									<span className="font-bold text-lg text-primary-gold">{formatPrice(calculateTotal())}</span>
 								</div>
 							</div>
-
-							{/* Remember Info Checkbox */}
 							<label className="flex items-center gap-2 mb-6 text-sm text-gray-600">
-								<input
-									type="checkbox"
-									checked={rememberInfo}
-									onChange={(e) => setRememberInfo(e.target.checked)}
-									className="w-4 h-4 text-primary-gold focus:ring-primary-gold rounded"
-								/>
+								<input type="checkbox" checked={rememberInfo} onChange={(e) => setRememberInfo(e.target.checked)} className="w-4 h-4 text-primary-gold focus:ring-primary-gold rounded" />
 								<span>Remember all information for faster payments</span>
 							</label>
 						</div>
@@ -705,4 +490,3 @@ export default function CheckoutPage() {
 		</div>
 	);
 }
-

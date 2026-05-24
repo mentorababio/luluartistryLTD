@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, XCircle, Package, Download } from "lucide-react";
 
-export default function OrderSuccessPage() {
+// 1. Move your main component logic into an internal component
+function OrderSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const reference = searchParams.get("reference");
@@ -15,8 +16,11 @@ export default function OrderSuccessPage() {
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
 
   useEffect(() => {
-    const savedOrder = localStorage.getItem("currentOrder");
-    if (savedOrder) setOrder(JSON.parse(savedOrder));
+    // Safe guard check just to ensure localStorage is ready
+    if (typeof window !== "undefined") {
+      const savedOrder = localStorage.getItem("currentOrder");
+      if (savedOrder) setOrder(JSON.parse(savedOrder));
+    }
 
     if (!reference) {
       setStatus("transfer");
@@ -216,5 +220,21 @@ ${order.customerInfo?.phone || ""}
         </Link>
       </div>
     </div>
+  );
+}
+
+// 2. Export a default wrapper component utilizing Suspense
+export default function OrderSuccessPage() {
+  return (
+    <Suspense 
+      fallback={
+        <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center gap-4">
+          <div className="w-10 h-10 border-4 border-[#C9A84C] border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-500 text-sm">Loading details...</p>
+        </div>
+      }
+    >
+      <OrderSuccessContent />
+    </Suspense>
   );
 }

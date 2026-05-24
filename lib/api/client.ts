@@ -1,88 +1,90 @@
-// Client-side API utility for calling backend endpoints
+const BASE_URL = "https://luluartistry-backend.onrender.com/api";
 
-const getApiBaseUrl = (): string => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-  return baseUrl ? baseUrl.replace(/\/$/, '') : '';
-};
+const getToken = () =>
+  typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+const authHeaders = () => ({
+  "Content-Type": "application/json",
+  ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+});
 
 export const apiClient = {
-  baseUrl: getApiBaseUrl(),
-
-  // Get token from localStorage
-  getToken: (): string | null => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('token');
-    }
-    return null;
-  },
-
-  // Build full URL
-  buildUrl: (endpoint: string): string => {
-    const base = getApiBaseUrl();
-    return base ? `${base}${endpoint}` : `/api${endpoint}`;
-  },
-
-  // GET request
-  async get<T>(endpoint: string): Promise<T> {
-    const url = apiClient.buildUrl(endpoint);
-    const token = apiClient.getToken();
-    
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
+  get: async <T = any>(endpoint: string): Promise<T> => {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "GET",
+      headers: authHeaders(),
     });
-
-    if (!res.ok) {
-      throw new Error(`API Error: ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
     return res.json();
   },
 
-  // POST request
-  async post<T>(endpoint: string, data: any): Promise<T> {
-    const url = apiClient.buildUrl(endpoint);
-    const token = apiClient.getToken();
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
+  post: async <T = any>(endpoint: string, data?: any): Promise<T> => {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "POST",
+      headers: authHeaders(),
       body: JSON.stringify(data),
     });
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error?.message || `API Error: ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
     return res.json();
   },
 
-  // PUT request
-  async put<T>(endpoint: string, data: any): Promise<T> {
-    const url = apiClient.buildUrl(endpoint);
-    const token = apiClient.getToken();
-
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
+  put: async <T = any>(endpoint: string, data?: any): Promise<T> => {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "PUT",
+      headers: authHeaders(),
       body: JSON.stringify(data),
     });
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error?.message || `API Error: ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
     return res.json();
   },
+
+  patch: async <T = any>(endpoint: string, data?: any): Promise<T> => {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
+    return res.json();
+  },
+
+  delete: async <T = any>(endpoint: string): Promise<T> => {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`API Error: ${res.status}`);
+    return res.json();
+  },
+};
+
+// ─── Correct endpoint paths matching Render backend ───────────────────────────
+
+export const endpoints = {
+  // Auth
+  login:          "/auth/login",
+  register:       "/auth/register",
+  me:             "/auth/me",
+  updateProfile:  "/auth/update-profile",
+  updatePassword: "/auth/update-password",
+  logout:         "/auth/logout",
+
+  // Orders — user
+  createOrder:    "/orders",
+  myOrders:       "/orders/my",
+  myOrder: (id: string) => `/orders/my/${id}`,
+  cancelOrder: (id: string) => `/orders/${id}/cancel`,
+
+  // Orders — Admin 
+  adminOrders:         "/orders/admin",
+  adminOrderDetails: (id: string) => `/orders/admin/${id}`,
+  adminOrderHistory: (id: string) => `/orders/admin/${id}/history`,
+  acceptOrder:       (id: string) => `/orders/admin/${id}/accept`,
+  declineOrder:      (id: string) => `/orders/admin/${id}/decline`,
+  deliverOrder:      (id: string) => `/orders/admin/${id}/deliver`,
+
+  // Payment
+  initializePayment: "/payment/initialize",
+  verifyPayment: (ref: string) => `/payment/verify/${ref}`,
+  confirmBankTransfer: (orderId: string) => `/payment/confirm-bank-transfer/${orderId}`,
 };

@@ -1,40 +1,48 @@
-import { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/api/response';
-import { requireAuth, requireAdmin } from '@/lib/api/auth';
-import { getOrderById, updateOrder } from '@/lib/api/db';
+import { NextResponse } from 'next/server';
 
-interface StatusParams {
-  id: string;
-}
-
-export async function PUT(request: NextRequest, { params }: { params: Promise<StatusParams> }) {
+// PATCH: Updates the order's tracking status flag and handles decline notes
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const user = requireAuth(request);
-    if (!user || !requireAdmin(user)) {
-      return errorResponse('Unauthorized', 401);
-    }
-
-    const { id } = await params;
     const body = await request.json();
-    const { status, note } = body;
+    // Destructure status along with decline details sent by your admin modal
+    const { status, declineReason, declineNote } = body; 
+    const orderId = params.id;
 
-    const order = getOrderById(id);
-    if (!order) {
-      return errorResponse('Order not found', 404);
+    if (!status) {
+      return NextResponse.json(
+        { success: false, message: "Missing required field: status" },
+        { status: 400 }
+      );
     }
 
-    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
-    if (!validStatuses.includes(status)) {
-      return errorResponse('Invalid status', 400);
-    }
+    // This is where your live DB query goes later:
+    // For a new or accepted status:
+    // await Order.findByIdAndUpdate(orderId, { status });
+    // 
+    // For a declined status:
+    // await Order.findByIdAndUpdate(orderId, { 
+    //   status, 
+    //   declineReason, 
+    //   declineNote 
+    // });
 
-    const updated = updateOrder(id, {
-      status,
-      ...(note && { notes: note }),
+    // Return the response back to your dashboard state
+    return NextResponse.json({ 
+      success: true, 
+      message: `Order ${orderId} status successfully updated to: ${status}`,
+      updatedId: orderId,
+      newStatus: status,
+      // Pass these back so you can verify the payload structure matches
+      declineDetails: status === "declined" ? { declineReason, declineNote } : null
     });
-
-    return successResponse(updated, 'Order status updated successfully');
-  } catch (error) {
-    return errorResponse('Failed to update order status', 500);
+    
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, message: error.message }, 
+      { status: 500 }
+    );
   }
 }

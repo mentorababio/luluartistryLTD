@@ -1,8 +1,8 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
 import { Search, Download, ChevronDown, Eye, Check, X } from "lucide-react";
+import { apiClient, endpoints } from "@/lib/api/client"; // FIXED: Added endpoints import
 
 interface Order {
   id: string;
@@ -45,25 +45,27 @@ export default function OrdersPage() {
   ];
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    // Fetch live orders database records directly from your online server
-    fetch("https://luluartistry-backend.onrender.com/api/orders", {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-    })
+    // FIXED: Swapped hardcoded path string to map to our clean endpoint mapping object
+    apiClient.get(endpoints.adminOrders)
       .then((res) => {
-        if (!res.ok) throw new Error();
-        return res.json();
-      })
-      .then((data) => {
-        // Fallback checks to handle data wrap structures safely
-        setOrders(data?.data || data || []);
+        const data = res.data;
+        const fetchedOrders = (data?.orders || data?.data || data || []).map((order: any) => ({
+          ...order,
+          id: order.id || order._id,
+          orderNumber: order.orderNumber || `ORD-${order._id?.substring(0, 5).toUpperCase() || '000'}`,
+          customerName: order.customerName || `${order.customerInfo?.firstName || 'Guest'} ${order.customerInfo?.lastName || ''}`.trim(),
+          customerEmail: order.customerEmail || order.customerInfo?.email || '',
+          items: order.items?.length || order.items || 1,
+          totalAmount: order.total || order.totalAmount || 0,
+          paymentStatus: order.paymentStatus === 'paid' || order.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+          date: order.createdAt ? new Date(order.createdAt).toLocaleDateString() : order.date || 'N/A',
+          status: order.status || 'new'
+        }));
+        setOrders(fetchedOrders);
         setIsLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Error loading admin orders:", err);
         setIsLoading(false);
       });
   }, []);
@@ -98,20 +100,11 @@ export default function OrdersPage() {
     return matchesSearch && matchesTab;
   });
 
+  // MERGED & FIXED: Now targets /orders/[id]/status beautifully without duplicate prefixes
   const handleStatusChange = (id: string, newStatus: "new" | "accepted" | "declined" | "history") => {
-    const token = localStorage.getItem("token");
-
-    // Live update endpoint synchronization block
-    fetch(`https://luluartistry-backend.onrender.com/api/orders/${id}/status`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ status: newStatus })
-    })
+    apiClient.patch(`/orders/${id}/status`, { status: newStatus })
     .then((res) => {
-      if (res.ok) {
+      if (res.data?.success || res.status === 200) {
         setOrders(
           orders.map((order) =>
             order.id === id ? { ...order, status: newStatus } : order
@@ -134,21 +127,17 @@ export default function OrdersPage() {
     setAdminNote("");
   };
 
+  // MERGED & FIXED: Sends payload structural fields matching your updated status router
   const handleConfirmDecline = () => {
     if (!decliningOrderId) return;
-    const token = localStorage.getItem("token");
 
-    // Sending status structure data up to Render production database
-    fetch(`https://luluartistry-backend.onrender.com/api/orders/${decliningOrderId}/decline`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ declineReason, declineNote: adminNote })
+    apiClient.patch(`/orders/${decliningOrderId}/status`, { 
+      status: "declined", 
+      declineReason, 
+      declineNote: adminNote 
     })
     .then((res) => {
-      if (res.ok) {
+      if (res.data?.success || res.status === 200) {
         setOrders(
           orders.map((order) =>
             order.id === decliningOrderId
@@ -166,7 +155,6 @@ export default function OrdersPage() {
   };
 
   const handleExportData = () => {
-    // Export filtered orders as CSV
     const csv = [
       ["Order ID", "Customer", "Email", "Items", "Total", "Payment", "Date", "Status"],
       ...filteredOrders.map((order) => [

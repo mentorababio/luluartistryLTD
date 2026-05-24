@@ -1,32 +1,22 @@
-import { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/api/response';
-import { requireAuth, requireAdmin } from '@/lib/api/auth';
-import { getAllOrders } from '@/lib/api/db';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
+  // Get the authorization token your frontend client sent
+  const authHeader = request.headers.get('authorization') || '';
+
   try {
-    const user = requireAuth(request);
-    if (!user || !requireAdmin(user)) {
-      return errorResponse('Unauthorized', 401);
-    }
-
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '20');
-    const status = url.searchParams.get('status');
-
-    const { orders, total } = getAllOrders(page, limit, status || undefined);
-
-    return successResponse({
-      orders,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
+    // Forward the request to your actual Render backend URL
+    const response = await fetch('https://luluartistry-backend.onrender.com/api/orders/admin', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader, // CRITICAL: This passes your admin token to Render
       },
     });
-  } catch (error) {
-    return errorResponse('Failed to fetch orders', 500);
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

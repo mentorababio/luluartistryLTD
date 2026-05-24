@@ -94,68 +94,43 @@ export default function SupportPage() {
     { from: "agent", text: "👋 Hi! I'm a Lulu Artistry support agent. How can I help you today?" },
   ]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!form.subject || !form.message) return;
-
-    setSubmitting(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/support/tickets", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(form),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data?.message || "Failed to submit ticket");
-        return;
-      }
-
-      setSubmitted(true);
-      setForm({ subject: "", category: "Order Issues", message: "" });
-      setTimeout(() => setSubmitted(false), 5000);
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
+    if (!form.subject || !form.message) {
+      setError("Please fill in subject and message.");
+      return;
     }
+
+    const message =
+      `*Support Ticket - Lulu Artistry*%0A%0A` +
+      `*Subject:* ${encodeURIComponent(form.subject)}%0A` +
+      `*Category:* ${encodeURIComponent(form.category)}%0A` +
+      `*Message:* ${encodeURIComponent(form.message)}`;
+
+   const link = document.createElement("a");
+link.href = `https://wa.me/2347031002094?text=${message}`;
+link.target = "_blank";
+link.rel = "noopener noreferrer";
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+
+    setSubmitted(true);
+    setForm({ subject: "", category: "Order Issues", message: "" });
+    setTimeout(() => setSubmitted(false), 5000);
   };
 
   const sendChatMessage = () => {
     if (!chatMessage.trim()) return;
     setChatMessages((prev) => [...prev, { from: "user", text: chatMessage }]);
     setChatMessage("");
-  setTimeout(() => {
-  const lower = chatMessage.toLowerCase();
-  let reply = "Thanks for your message! A support agent will follow up shortly. You can also reach us at lulusartistry321@gmail.com.";
-
-  if (lower.includes("order")) {
-    reply = "For order issues, please share your Order ID and we'll look into it right away!";
-  } else if (lower.includes("payment") || lower.includes("pay")) {
-    reply = "For payment issues, we accept bank transfers, debit/credit cards and Paystack. What seems to be the problem?";
-  } else if (lower.includes("delivery") || lower.includes("shipping")) {
-    reply = "Delivery takes 2–4 business days. Within Calabar, same-day delivery is available for orders before 12 PM.";
-  } else if (lower.includes("return") || lower.includes("refund")) {
-    reply = "All sales are final. However, if you received a damaged or wrong item, contact us within 24 hours and we'll resolve it quickly.";
-  } else if (lower.includes("training") || lower.includes("course")) {
-    reply = "We offer both online and in-person lash & brow training. You'll receive a certificate upon completion! Interested?";
-  } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey")) {
-    reply = "Hi there! 😊 How can I help you today?";
-  } else if (lower.includes("thank")) {
-    reply = "You're welcome! Is there anything else I can help you with?";
-  }
-
-  setChatMessages((prev) => [
-    ...prev,
-    { from: "agent", text: reply },
-  ]);
-}, 1000);
+    setTimeout(() => {
+      setChatMessages((prev) => [
+        ...prev,
+        { from: "agent", text: "Thanks for your message! A support agent will follow up shortly. You can also reach us at lulusartistry321@gmail.com." },
+      ]);
+    }, 1000);
   };
 
   return (
@@ -302,11 +277,11 @@ export default function SupportPage() {
                 </div>
                 <button
                   type="submit"
-                  disabled={submitting}
+                 disabled={false}
                   className="w-full bg-[#C9A84C] text-white font-semibold py-3 rounded-lg hover:bg-yellow-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   <Send size={16} />
-                  {submitting ? "Submitting..." : "Submit Ticket"}
+                  Submit Ticket
                 </button>
               </form>
             </div>

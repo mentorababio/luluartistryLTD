@@ -1,73 +1,56 @@
-/**
- * POST /api/payment/initialize
- *
- * Creates a Paystack payment session and returns the payment URL.
- * The frontend redirects the user to this URL to complete payment.
- */
+import { NextResponse } from "next/server";
 
-import { NextRequest } from 'next/server';
-import { successResponse, errorResponse } from '@/lib/api/response';
-import { requireAuth } from '@/lib/api/auth';
-
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || 'sk_test_your_test_key_here';
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const user = requireAuth(request);
-    if (!user) {
-      return errorResponse('Unauthorized', 401);
-    }
-
     const body = await request.json();
-    const { email, amount, orderId, callbackUrl } = body;
+    const { email, amount, metadata } = body;
 
-    if (!email || !amount || !orderId) {
-      return errorResponse('Email, amount and orderId are required', 400);
+    if (!email || !amount) {
+      return NextResponse.json(
+        { error: "Missing required fields: email and amount are required." },
+        { status: 400 }
+      );
     }
 
-    // Convert amount to kobo (Paystack uses kobo, not naira)
-    // e.g. ₦5000 = 500000 kobo
-    const amountInKobo = Math.round(amount * 100);
+    // Paystack expects amount in Kobo (multiply Naira by 100)
+    const paystackAmount = Math.round(parseFloat(amount) * 100);
 
-    // Initialize transaction with Paystack
-    const response = await fetch('https://api.paystack.co/transaction/initialize', {
-      method: 'POST',
+    // Call Paystack API to initialize the transaction
+    const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
       headers: {
-        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         email,
-        amount: amountInKobo,
-        reference: `ORD-${orderId}-${Date.now()}`,
-        callback_url: callbackUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/order-success`,
-        metadata: {
-          orderId,
-          userId: user.id,
-          custom_fields: [
-            {
-              display_name: 'Order ID',
-              variable_name: 'order_id',
-              value: orderId,
-            },
-          ],
-        },
+        amount: paystackAmount,
+        callback_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/payment/verify`,
+        metadata: metadata || {},
       }),
     });
 
-    const data = await response.json();
+    const data = await paystackResponse.json();
 
-    if (!data.status) {
-      return errorResponse(data.message || 'Failed to initialize payment', 400);
+    if (!paystackResponse.ok || !data.status) {
+      return NextResponse.json(
+        { error: data.message || "Failed to initialize payment with Paystack" },
+        { status: paystackResponse.status }
+      );
     }
 
-    return successResponse({
-      authorizationUrl: data.data.authorization_url,
-      accessCode: data.data.access_code,
+    // Return the authorization URL and reference back to the frontend
+    return NextResponse.json({
+      success: true,
+      authorization_url: data.data.authorization_url,
       reference: data.data.reference,
-    }, 'Payment initialized successfully');
-  } catch (error) {
-    console.error('[POST /api/payment/initialize]', error);
-    return errorResponse('Failed to initialize payment', 500);
+    });
+
+  } catch (error: any) {
+    console.error("Payment initialization error:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error", details: error.message },
+      { status: 500 }
+    );
   }
 }

@@ -75,7 +75,16 @@ export const endpoints = {
   myOrder: (id: string) => `/orders/my/${id}`,
   cancelOrder: (id: string) => `/orders/${id}/cancel`,
 
+  // Orders — Admin 
+  adminOrders:         "/orders/admin",
+  adminOrderDetails: (id: string) => `/orders/admin/${id}`,
+  adminOrderHistory: (id: string) => `/orders/admin/${id}/history`,
+  acceptOrder:       (id: string) => `/orders/admin/${id}/accept`,
+  declineOrder:      (id: string) => `/orders/admin/${id}/decline`,
+  deliverOrder:      (id: string) => `/orders/admin/${id}/deliver`,
+
   // Payment
   initializePayment: "/payment/initialize",
   verifyPayment: (ref: string) => `/payment/verify/${ref}`,
+  confirmBankTransfer: (orderId: string) => `/payment/confirm-bank-transfer/${orderId}`,
 };

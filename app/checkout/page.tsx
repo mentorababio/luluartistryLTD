@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { User, Truck, CreditCard, CheckCircle, Shield, Copy, Loader } from "lucide-react";
 import toast from "react-hot-toast";
-import { apiClient } from "@/lib/api/client";
+import { apiClient, endpoints } from "@/lib/api/client";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -33,9 +33,14 @@ export default function CheckoutPage() {
     bankName: "Lulu Artistry LTD - GTBank",
     accountNumber: "0123456789",
     accountName: "Lulu Artistry",
-    selectedBank: ""
   });
   const [selectedBank, setSelectedBank] = useState("");
+
+  // ── Bank Transfer Reference State ─────────────────────────────────────────
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [transferReference, setTransferReference] = useState("");
+  const [submittingRef, setSubmittingRef] = useState(false);
 
   useEffect(() => {
     const savedCart = localStorage.getItem("cart");
@@ -75,7 +80,43 @@ export default function CheckoutPage() {
     toast.success(`${label} copied to clipboard!`);
   };
 
-  // ── handleProceed — uses Render backend ───────────────────────────────────
+  // ── Submit Transfer Reference ─────────────────────────────────────────────
+  const handleSubmitReference = async () => {
+    if (!transferReference.trim()) {
+      toast.error("Please enter your transfer reference number");
+      return;
+    }
+    if (!placedOrderId) {
+      toast.error("Order not found. Please try again.");
+      return;
+    }
+
+    setSubmittingRef(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `https://luluartistry-backend.onrender.com/api/orders/my/${placedOrderId}/payment-reference`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reference: transferReference }),
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to submit reference");
+
+      toast.success("Payment reference submitted! We will confirm your payment shortly.");
+      router.push("/order-success");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to submit reference. Please try again.");
+    } finally {
+      setSubmittingRef(false);
+    }
+  };
+
   const handleProceed = async () => {
     if (
       !customerData.fullName ||
@@ -101,7 +142,6 @@ export default function CheckoutPage() {
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
 
-      // Step 1: Create order — POST /orders (Render backend)
       const orderPayload = {
         items: cartItems.map((item) => ({
           product: item.id,
@@ -128,7 +168,7 @@ export default function CheckoutPage() {
         notes: "",
       };
 
-      const orderRes = await apiClient.post<any>("/orders", orderPayload);
+      const orderRes = await apiClient.post<any>(endpoints.createOrder, orderPayload);
       const order = orderRes?.data || orderRes;
       const orderId = order?._id || order?.id;
 
@@ -137,37 +177,39 @@ export default function CheckoutPage() {
       localStorage.setItem("currentOrder", JSON.stringify(order));
       localStorage.removeItem("cart");
 
-      // Step 2: Bank transfer — go to success page
+      // ── Bank Transfer: show reference input instead of redirecting ────────
       if (paymentMethod === "transfer") {
-        toast.success("Order placed! Please complete your bank transfer.");
-        router.push("/order-success");
+        setPlacedOrderId(orderId);
+        setOrderPlaced(true);
+        setIsProcessing(false);
+        toast.success("Order created! Please complete your bank transfer and enter your reference below.");
         return;
       }
 
-      // Step 3: Card — initialize Paystack via Render backend
-      // POST /payment/initialize with correct body format
-      const payRes = await apiClient.post<any>("/payment/initialize", {
-        type: "order",
-        referenceId: orderId,
-        amount: calculateTotal(),
-        email: customerData.email,
-      });
+    // ── Card: Paystack commented out until keys are ready ────────────────────
+// const payRes = await apiClient.post<any>(endpoints.initializePayment, {
+//   type: "order",
+//   referenceId: orderId,
+//   amount: calculateTotal(),
+//   email: customerData.email,
+// });
 
-      const authorizationUrl =
-        payRes?.data?.authorizationUrl ||
-        payRes?.authorizationUrl;
+// const authorizationUrl = payRes?.data?.authorizationUrl || payRes?.authorizationUrl;
+// if (!authorizationUrl) throw new Error("Failed to get payment URL");
 
-      if (!authorizationUrl) throw new Error("Failed to get payment URL");
+// window.location.href = authorizationUrl;
 
-      // Step 4: Redirect to Paystack
-      window.location.href = authorizationUrl;
+// Temporary: redirect to success page until Paystack keys are configured
+toast.success("Order placed successfully!");
+router.push("/order-success");
+
+
     } catch (error: any) {
       console.error("Checkout failed:", error);
-      toast.error(error?.message || "Something went wrong. Please try again.");
+      toast.error(error?.response?.data?.message || error?.message || "Something went wrong. Please try again.");
       setIsProcessing(false);
     }
   };
-  // ── end handleProceed ─────────────────────────────────────────────────────
 
   if (cartItems.length === 0) return null;
 
@@ -207,13 +249,13 @@ export default function CheckoutPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { label: "Full Name *",          key: "fullName",       type: "text",  placeholder: "Enter your name" },
-                  { label: "Email Address *",       key: "email",          type: "email", placeholder: "Enter email" },
-                  { label: "Phone Number *",        key: "phone",          type: "tel",   placeholder: "Enter phone number" },
-                  { label: "Street Address *",      key: "streetAddress",  type: "text",  placeholder: "Enter street address" },
-                  { label: "City *",                key: "city",           type: "text",  placeholder: "Enter city" },
-                  { label: "State *",               key: "state",          type: "text",  placeholder: "Enter state" },
-                  { label: "Zip/Postcode (Optional)", key: "zipCode",      type: "text",  placeholder: "Enter zip/postcode" },
+                  { label: "Full Name *",            key: "fullName",      type: "text",  placeholder: "Enter your name" },
+                  { label: "Email Address *",         key: "email",         type: "email", placeholder: "Enter email" },
+                  { label: "Phone Number *",          key: "phone",         type: "tel",   placeholder: "Enter phone number" },
+                  { label: "Street Address *",        key: "streetAddress", type: "text",  placeholder: "Enter street address" },
+                  { label: "City *",                  key: "city",          type: "text",  placeholder: "Enter city" },
+                  { label: "State *",                 key: "state",         type: "text",  placeholder: "Enter state" },
+                  { label: "Zip/Postcode (Optional)", key: "zipCode",       type: "text",  placeholder: "Enter zip/postcode" },
                 ].map(({ label, key, type, placeholder }) => (
                   <div key={key}>
                     <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
@@ -298,7 +340,7 @@ export default function CheckoutPage() {
                               <p className="text-xs text-gray-600">{label}</p>
                               <p className="font-semibold">{value}</p>
                             </div>
-                            <button onClick={() => copyToClipboard(value, label)} className="p-2 hover:bg-gray-200 rounded"><Copy size={16} /></button>
+                            <button type="button" onClick={() => copyToClipboard(value, label)} className="p-2 hover:bg-gray-200 rounded"><Copy size={16} /></button>
                           </div>
                         ))}
                         <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border-2 border-primary-gold">
@@ -306,7 +348,7 @@ export default function CheckoutPage() {
                             <p className="text-xs text-gray-600">Amount to Transfer</p>
                             <p className="font-bold text-primary-gold text-lg">{formatPrice(calculateTotal())}</p>
                           </div>
-                          <button onClick={() => copyToClipboard(formatPrice(calculateTotal()), "Amount")} className="p-2 hover:bg-yellow-100 rounded"><Copy size={16} /></button>
+                          <button type="button" onClick={() => copyToClipboard(formatPrice(calculateTotal()), "Amount")} className="p-2 hover:bg-yellow-100 rounded"><Copy size={16} /></button>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Select your bank</label>
@@ -319,6 +361,39 @@ export default function CheckoutPage() {
                             <option value="firstbank">First Bank</option>
                           </select>
                         </div>
+
+                        {/* ── Transfer Reference Input (shows after order is placed) ── */}
+                        {orderPlaced && (
+                          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg space-y-3">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={18} className="text-green-500" />
+                              <p className="text-sm font-semibold text-green-700">Order created! Now confirm your payment.</p>
+                            </div>
+                            <p className="text-xs text-green-600">
+                              Transfer <span className="font-bold">{formatPrice(calculateTotal())}</span> to the account above, then enter your transfer reference below.
+                            </p>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Transfer Reference Number *</label>
+                              <input
+                                type="text"
+                                value={transferReference}
+                                onChange={(e) => setTransferReference(e.target.value)}
+                                placeholder="e.g. TRF202401151230"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent text-sm"
+                              />
+                              <p className="text-xs text-gray-400 mt-1">This is the reference/receipt number from your bank app or USSD.</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleSubmitReference}
+                              disabled={submittingRef}
+                              className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                            >
+                              {submittingRef ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCircle size={16} />}
+                              {submittingRef ? "Submitting..." : "I've Made the Payment"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -330,11 +405,15 @@ export default function CheckoutPage() {
             <div>
               <button
                 onClick={handleProceed}
-                disabled={isProcessing}
-                className={`w-full font-bold py-4 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${isProcessing ? "bg-gray-400 text-gray-600 cursor-not-allowed" : "bg-primary-gold hover:bg-yellow-500 text-black"}`}
+                disabled={isProcessing || orderPlaced}
+                className={`w-full font-bold py-4 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${
+                  isProcessing || orderPlaced
+                    ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                    : "bg-primary-gold hover:bg-yellow-500 text-black"
+                }`}
               >
                 {isProcessing && <Loader className="w-4 h-4 animate-spin" />}
-                {isProcessing ? "Processing..." : paymentMethod === "card" ? "Proceed to Payment" : "Place Order"}
+                {isProcessing ? "Processing..." : orderPlaced ? "Order Placed ✓" : paymentMethod === "card" ? "Proceed to Payment" : "Place Order"}
               </button>
               <label className="flex items-center gap-2 mt-4 text-sm text-gray-600">
                 <input type="checkbox" checked={agreeToTerms} onChange={(e) => setAgreeToTerms(e.target.checked)} className="w-4 h-4 text-primary-gold focus:ring-primary-gold rounded" />

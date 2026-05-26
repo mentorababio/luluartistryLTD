@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, XCircle, Package, Download } from "lucide-react";
 
-// 1. Move your main component logic into an internal component
+const BASE_URL = "https://luluartistry-backend.onrender.com/api";
+
 function OrderSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -16,7 +17,6 @@ function OrderSuccessContent() {
   const [paymentInfo, setPaymentInfo] = useState<any>(null);
 
   useEffect(() => {
-    // Safe guard check just to ensure localStorage is ready
     if (typeof window !== "undefined") {
       const savedOrder = localStorage.getItem("currentOrder");
       if (savedOrder) setOrder(JSON.parse(savedOrder));
@@ -27,10 +27,11 @@ function OrderSuccessContent() {
       return;
     }
 
-    fetch(`/api/payment/verify?reference=${reference}`)
+    // ── Verify via Render backend (public endpoint, no auth needed) ──────────
+    fetch(`${BASE_URL}/payment/verify/${reference}`)
       .then((res) => res.json())
       .then((data) => {
-        if (data?.data?.status === "success") {
+        if (data?.success && data?.data?.status === "success") {
           setPaymentInfo(data.data);
           setStatus("success");
         } else {
@@ -43,7 +44,8 @@ function OrderSuccessContent() {
   const handleDownloadReceipt = () => {
     if (!order) return;
 
-    const orderId = `ORD-${order.id?.slice(0, 8).toUpperCase()}`;
+    const rawId = order._id || order.id || "";
+    const orderId = `ORD-${rawId.slice(-8).toUpperCase()}`;
     const date = new Date().toLocaleDateString("en-NG", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
@@ -131,16 +133,16 @@ ${order.customerInfo?.phone || ""}
     );
   }
 
+  const rawId = order?._id || order?.id || "";
+
   return (
     <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center px-4 py-12">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 max-w-md w-full text-center">
 
-        {/* Icon */}
         <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
           <CheckCircle size={48} className="text-green-500" />
         </div>
 
-        {/* Title */}
         <h1 className="text-2xl font-bold text-gray-800 mb-2">
           {status === "transfer" ? "Order Placed!" : "Payment Successful!"}
         </h1>
@@ -150,13 +152,12 @@ ${order.customerInfo?.phone || ""}
             : "Your payment was successful and your order is confirmed!"}
         </p>
 
-        {/* Order Info */}
         {order && (
           <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Order ID</span>
               <span className="font-semibold text-gray-800">
-                ORD-{order.id?.slice(0, 8).toUpperCase()}
+                ORD-{rawId.slice(-8).toUpperCase()}
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -184,7 +185,6 @@ ${order.customerInfo?.phone || ""}
           </div>
         )}
 
-        {/* Bank Transfer Details */}
         {status === "transfer" && (
           <div className="bg-yellow-50 border border-[#C9A84C] rounded-xl p-4 mb-6 text-left">
             <p className="text-sm font-semibold text-gray-700 mb-2">Transfer to:</p>
@@ -197,7 +197,6 @@ ${order.customerInfo?.phone || ""}
           </div>
         )}
 
-        {/* Buttons */}
         <Link href="/orders">
           <button className="w-full bg-[#C9A84C] text-white font-semibold py-3 rounded-lg hover:bg-yellow-600 transition-colors flex items-center justify-center gap-2">
             <Package size={16} />
@@ -223,10 +222,9 @@ ${order.customerInfo?.phone || ""}
   );
 }
 
-// 2. Export a default wrapper component utilizing Suspense
 export default function OrderSuccessPage() {
   return (
-    <Suspense 
+    <Suspense
       fallback={
         <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center gap-4">
           <div className="w-10 h-10 border-4 border-[#C9A84C] border-t-transparent rounded-full animate-spin" />

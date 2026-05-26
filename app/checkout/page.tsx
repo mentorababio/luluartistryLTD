@@ -8,12 +8,39 @@ import { User, Truck, CreditCard, CheckCircle, Shield, Copy, Loader } from "luci
 import toast from "react-hot-toast";
 import { apiClient, endpoints } from "@/lib/api/client";
 
+const BASE_URL = "https://luluartistry-backend.onrender.com/api";
+
+interface CustomerData {
+  fullName: string;
+  email: string;
+  phone: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zipCode: string;
+}
+
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  quantity?: number;
+}
+
+interface LiveBankDetails {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  paymentReference?: string;
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
-  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [currentStep, setCurrentStep] = useState(2);
 
-  const [customerData, setCustomerData] = useState({
+  const [customerData, setCustomerData] = useState<CustomerData>({
     fullName: "",
     email: "",
     phone: "",
@@ -29,23 +56,39 @@ export default function CheckoutPage() {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [bankDetails] = useState({
-    bankName: "Lulu Artistry LTD - GTBank",
-    accountNumber: "0123456789",
-    accountName: "Lulu Artistry",
-  });
   const [selectedBank, setSelectedBank] = useState("");
 
-  // ── Bank Transfer Reference State ─────────────────────────────────────────
+  // ── Bank Transfer State ───────────────────────────────────────────────────
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [transferReference, setTransferReference] = useState("");
   const [submittingRef, setSubmittingRef] = useState(false);
 
+  // ── Live bank details from order response ─────────────────────────────────
+  const [liveBankDetails, setLiveBankDetails] = useState<LiveBankDetails>({
+    bankName: "Lulu Artistry LTD - GTBank",
+    accountNumber: "0123456789",
+    accountName: "Lulu Artistry",
+  });
+
   useEffect(() => {
+    // 1. Verify Authentication Token Exists
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Please login to access the checkout screen.");
+      router.push("/login");
+      return;
+    }
+
+    // 2. Load Cart
     const savedCart = localStorage.getItem("cart");
     if (savedCart) {
-      setCartItems(JSON.parse(savedCart));
+      const parsedCart = JSON.parse(savedCart);
+      if (parsedCart.length === 0) {
+        router.push("/cart");
+      } else {
+        setCartItems(parsedCart);
+      }
     } else {
       router.push("/cart");
     }
@@ -64,7 +107,6 @@ export default function CheckoutPage() {
   };
 
   const calculateTotal = () => calculateSubtotal() + getShippingCost();
-
   const formatPrice = (price: number) => `₦${price.toLocaleString("en-NG")}`;
 
   const getDeliveryDate = () => {
@@ -95,7 +137,7 @@ export default function CheckoutPage() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `https://luluartistry-backend.onrender.com/api/orders/my/${placedOrderId}/payment-reference`,
+        `${BASE_URL}/orders/my/${placedOrderId}/payment-reference`,
         {
           method: "PATCH",
           headers: {
@@ -117,6 +159,7 @@ export default function CheckoutPage() {
     }
   };
 
+  // ── Main Proceed Handler ──────────────────────────────────────────────────
   const handleProceed = async () => {
     if (
       !customerData.fullName ||
@@ -168,6 +211,7 @@ export default function CheckoutPage() {
         notes: "",
       };
 
+      // Step 1: Create order via protected endpoint
       const orderRes = await apiClient.post<any>(endpoints.createOrder, orderPayload);
       const order = orderRes?.data || orderRes;
       const orderId = order?._id || order?.id;
@@ -177,32 +221,54 @@ export default function CheckoutPage() {
       localStorage.setItem("currentOrder", JSON.stringify(order));
       localStorage.removeItem("cart");
 
-      // ── Bank Transfer: show reference input instead of redirecting ────────
+      // ── Bank Transfer Processing ──────────────────────────────────────────
       if (paymentMethod === "transfer") {
+        if (order?.payment?.bankDetails) {
+          setLiveBankDetails({
+            bankName: order.payment.bankDetails.bankName || liveBankDetails.bankName,
+            accountNumber: order.payment.bankDetails.accountNumber || liveBankDetails.accountNumber,
+            accountName: order.payment.bankDetails.accountName || liveBankDetails.accountName,
+            paymentReference: order.payment?.reference,
+          });
+        } else if (order?.bankDetails) {
+          setLiveBankDetails({
+            bankName: order.bankDetails.bankName || liveBankDetails.bankName,
+            accountNumber: order.bankDetails.accountNumber || liveBankDetails.accountNumber,
+            accountName: order.bankDetails.accountName || liveBankDetails.accountName,
+            paymentReference: order.payment?.reference || order.paymentReference,
+          });
+        } else if (order?.paymentReference || order?.payment?.reference) {
+          // Additional fallback parser configuration using document keys
+          setLiveBankDetails(prev => ({
+            ...prev,
+            paymentReference: order?.paymentReference || order?.payment?.reference
+          }));
+        }
+
         setPlacedOrderId(orderId);
         setOrderPlaced(true);
         setIsProcessing(false);
-        toast.success("Order created! Please complete your bank transfer and enter your reference below.");
+        toast.success("Order created! Please complete your bank transfer.");
         return;
       }
 
-    // ── Card: Paystack commented out until keys are ready ────────────────────
-// const payRes = await apiClient.post<any>(endpoints.initializePayment, {
-//   type: "order",
-//   referenceId: orderId,
-//   amount: calculateTotal(),
-//   email: customerData.email,
-// });
+      // ── Paystack Card Payment Initialization ──────────────────────────────
+      const payRes = await apiClient.post<any>(endpoints.initializePayment, {
+        type: "order",
+        referenceId: orderId,
+        amount: calculateTotal(),
+        email: customerData.email,
+      });
 
-// const authorizationUrl = payRes?.data?.authorizationUrl || payRes?.authorizationUrl;
-// if (!authorizationUrl) throw new Error("Failed to get payment URL");
+      const authorizationUrl =
+        payRes?.data?.authorizationUrl ||
+        payRes?.authorizationUrl ||
+        payRes?.data?.authorization_url ||
+        payRes?.authorization_url;
 
-// window.location.href = authorizationUrl;
+      if (!authorizationUrl) throw new Error("Failed to get payment URL from Paystack");
 
-// Temporary: redirect to success page until Paystack keys are configured
-toast.success("Order placed successfully!");
-router.push("/order-success");
-
+      window.location.href = authorizationUrl;
 
     } catch (error: any) {
       console.error("Checkout failed:", error);
@@ -261,7 +327,7 @@ router.push("/order-success");
                     <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
                     <input
                       type={type}
-                      value={(customerData as any)[key]}
+                      value={customerData[key as keyof CustomerData]}
                       onChange={(e) => setCustomerData({ ...customerData, [key]: e.target.value })}
                       placeholder={placeholder}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
@@ -331,9 +397,9 @@ router.push("/order-success");
                     {paymentMethod === "transfer" && (
                       <div className="mt-4 space-y-3">
                         {[
-                          { label: "Bank Name",      value: bankDetails.bankName },
-                          { label: "Account Number", value: bankDetails.accountNumber },
-                          { label: "Account Name",   value: bankDetails.accountName },
+                          { label: "Bank Name",      value: liveBankDetails.bankName },
+                          { label: "Account Number", value: liveBankDetails.accountNumber },
+                          { label: "Account Name",   value: liveBankDetails.accountName },
                         ].map(({ label, value }) => (
                           <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                             <div>
@@ -348,7 +414,7 @@ router.push("/order-success");
                             <p className="text-xs text-gray-600">Amount to Transfer</p>
                             <p className="font-bold text-primary-gold text-lg">{formatPrice(calculateTotal())}</p>
                           </div>
-                          <button type="button" onClick={() => copyToClipboard(formatPrice(calculateTotal()), "Amount")} className="p-2 hover:bg-yellow-100 rounded"><Copy size={16} /></button>
+                          <button type="button" onClick={() => copyToClipboard(calculateTotal().toString(), "Amount")} className="p-2 hover:bg-yellow-100 rounded"><Copy size={16} /></button>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Select your bank</label>
@@ -362,18 +428,31 @@ router.push("/order-success");
                           </select>
                         </div>
 
-                        {/* ── Transfer Reference Input (shows after order is placed) ── */}
+                        {/* ── Transfer Reference Container ── */}
                         {orderPlaced && (
                           <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg space-y-3">
                             <div className="flex items-center gap-2">
                               <CheckCircle size={18} className="text-green-500" />
                               <p className="text-sm font-semibold text-green-700">Order created! Now confirm your payment.</p>
                             </div>
+
+                            {liveBankDetails.paymentReference && (
+                              <div className="flex items-center justify-between p-3 bg-white border border-green-200 rounded-lg">
+                                <div>
+                                  <p className="text-xs text-gray-500">Your Payment Reference</p>
+                                  <p className="font-bold text-gray-800">{liveBankDetails.paymentReference}</p>
+                                </div>
+                                <button type="button" onClick={() => copyToClipboard(liveBankDetails.paymentReference!, "Payment reference")} className="p-2 hover:bg-gray-100 rounded"><Copy size={16} /></button>
+                              </div>
+                            )}
+
                             <p className="text-xs text-green-600">
-                              Transfer <span className="font-bold">{formatPrice(calculateTotal())}</span> to the account above, then enter your transfer reference below.
+                              Transfer <span className="font-bold">{formatPrice(calculateTotal())}</span> to the account above
+                              {liveBankDetails.paymentReference && <span>, using the reference above as narration</span>}.
+                              Then enter your transfer receipt/reference below.
                             </p>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Transfer Reference Number *</label>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Transfer Receipt Reference *</label>
                               <input
                                 type="text"
                                 value={transferReference}

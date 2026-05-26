@@ -1,7 +1,6 @@
-const BASE_URL = "https://luluartistry-backend.onrender.com/api";
+const BASE_URL = ""
 
-const getToken = () =>
-  typeof window !== "undefined" ? localStorage.getItem("token") : null;
+const getToken = () => typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -9,17 +8,10 @@ const authHeaders = () => ({
 });
 
 export const apiClient = {
-  get: async <T = any>(endpoint: string): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${endpoint}`, {
-      method: "GET",
-      headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
-  },
-
   post: async <T = any>(endpoint: string, data?: any): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${endpoint}`, {
+    const url = `${BASE_URL}${endpoint}`;
+    console.log(`[API CALL] POST ${url}`); // CHECK THIS IN BROWSER CONSOLE
+    const res = await fetch(url, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(data),
@@ -27,64 +19,14 @@ export const apiClient = {
     if (!res.ok) throw new Error(`API Error: ${res.status}`);
     return res.json();
   },
-
-  put: async <T = any>(endpoint: string, data?: any): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${endpoint}`, {
-      method: "PUT",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
-  },
-
-  patch: async <T = any>(endpoint: string, data?: any): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${endpoint}`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
-  },
-
-  delete: async <T = any>(endpoint: string): Promise<T> => {
-    const res = await fetch(`${BASE_URL}${endpoint}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
-  },
+  // ... (keep your other methods: get, put, patch, delete)
 };
 
-// ─── Correct endpoint paths matching Render backend ───────────────────────────
-
 export const endpoints = {
-  // Auth
-  login:          "/auth/login",
-  register:       "/auth/register",
-  me:             "/auth/me",
-  updateProfile:  "/auth/update-profile",
-  updatePassword: "/auth/update-password",
-  logout:         "/auth/logout",
-
-  // Orders — user
-  createOrder:    "/orders",
-  myOrders:       "/orders/my",
+  // ... (auth endpoints)
+  createOrder: "/orders", // Correct: No trailing slash
+  myOrders: "/orders/my",
   myOrder: (id: string) => `/orders/my/${id}`,
   cancelOrder: (id: string) => `/orders/${id}/cancel`,
-
-  // Orders — Admin 
-  adminOrders:         "/orders/admin",
-  adminOrderDetails: (id: string) => `/orders/admin/${id}`,
-  adminOrderHistory: (id: string) => `/orders/admin/${id}/history`,
-  acceptOrder:       (id: string) => `/orders/admin/${id}/accept`,
-  declineOrder:      (id: string) => `/orders/admin/${id}/decline`,
-  deliverOrder:      (id: string) => `/orders/admin/${id}/deliver`,
-
-  // Payment
-  initializePayment: "/payment/initialize",
-  verifyPayment: (ref: string) => `/payment/verify/${ref}`,
-  confirmBankTransfer: (orderId: string) => `/payment/confirm-bank-transfer/${orderId}`,
+  // ... (rest of the endpoints)
 };

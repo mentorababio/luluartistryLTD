@@ -63,7 +63,7 @@ export default function OrderDetailPage() {
     if (!token) { router.push("/login"); return; }
 
     // Correct endpoint: GET /orders/my/:id
-    apiClient.get<any>(`/orders/my/${id}`)
+   apiClient.get<any>(endpoints.myOrder(id))
       .then((data) => {
         setOrder(data?.data || data || null);
         setLoading(false);

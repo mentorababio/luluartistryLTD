@@ -8,7 +8,11 @@ import { User, Truck, CreditCard, CheckCircle, Shield, Copy, Loader } from "luci
 import toast from "react-hot-toast";
 import { apiClient, endpoints } from "@/lib/api/client";
 
-const BASE_URL = "https://luluartistry-backend.onrender.com/api";
+// ── FIX: BASE_URL must NOT include /api — endpoints already include it ────────
+const BASE_URL = "https://luluartistry-backend.onrender.com";
+// Previously was "https://luluartistry-backend.onrender.com/api" which caused
+// handleSubmitReference to call /api/api/orders/... → 404
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface CustomerData {
   fullName: string;
@@ -58,13 +62,11 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedBank, setSelectedBank] = useState("");
 
-  // ── Bank Transfer State ───────────────────────────────────────────────────
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [transferReference, setTransferReference] = useState("");
   const [submittingRef, setSubmittingRef] = useState(false);
 
-  // ── Live bank details from order response ─────────────────────────────────
   const [liveBankDetails, setLiveBankDetails] = useState<LiveBankDetails>({
     bankName: "Lulu Artistry LTD - GTBank",
     accountNumber: "0123456789",
@@ -72,7 +74,6 @@ export default function CheckoutPage() {
   });
 
   useEffect(() => {
-    // 1. Verify Authentication Token Exists
     const token = localStorage.getItem("token");
     if (!token) {
       toast.error("Please login to access the checkout screen.");
@@ -80,13 +81,25 @@ export default function CheckoutPage() {
       return;
     }
 
-    // 2. Load Cart
     const savedCart = localStorage.getItem("cart");
     if (savedCart) {
       const parsedCart = JSON.parse(savedCart);
       if (parsedCart.length === 0) {
         router.push("/cart");
       } else {
+        // ── FIX: Warn if any cart item has a non-ObjectId id ─────────────────
+        // This catches products added from static pages (home, new-arrivals)
+        // before the PRODUCT_ID_MAP is filled in.
+        const invalidItems = parsedCart.filter(
+          (item: CartItem) => !/^[a-f\d]{24}$/i.test(item.id)
+        );
+        if (invalidItems.length > 0) {
+          toast.error(
+            `Some items in your cart aren't linked to our store yet: ${invalidItems.map((i: CartItem) => i.name).join(", ")}. Please remove them or add them from the Shop page.`,
+            { duration: 6000 }
+          );
+        }
+        // ─────────────────────────────────────────────────────────────────────
         setCartItems(parsedCart);
       }
     } else {
@@ -136,8 +149,13 @@ export default function CheckoutPage() {
     setSubmittingRef(true);
     try {
       const token = localStorage.getItem("token");
+
+      // ── FIX: Use BASE_URL (no /api) + full path including /api ────────────
+      // Previously: `${BASE_URL}/api/orders/my/...` with BASE_URL ending in /api
+      // → became /api/api/orders/... → 404
+      // Now BASE_URL = "https://luluartistry-backend.onrender.com" (no /api)
       const res = await fetch(
-        `${BASE_URL}/orders/my/${placedOrderId}/payment-reference`,
+        `${BASE_URL}/api/orders/my/${placedOrderId}/payment-reference`,
         {
           method: "PATCH",
           headers: {
@@ -147,6 +165,7 @@ export default function CheckoutPage() {
           body: JSON.stringify({ reference: transferReference }),
         }
       );
+      // ─────────────────────────────────────────────────────────────────────
 
       if (!res.ok) throw new Error("Failed to submit reference");
 
@@ -177,6 +196,17 @@ export default function CheckoutPage() {
       toast.error("Please agree to the terms & conditions");
       return;
     }
+
+    // ── FIX: Block checkout if any item has an invalid product ID ─────────
+    const invalidItems = cartItems.filter(item => !/^[a-f\d]{24}$/i.test(item.id));
+    if (invalidItems.length > 0) {
+      toast.error(
+        `Cannot checkout: some items aren't linked to our store: ${invalidItems.map(i => i.name).join(", ")}. Please remove them and add from the Shop page.`,
+        { duration: 6000 }
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     setIsProcessing(true);
 
@@ -211,7 +241,6 @@ export default function CheckoutPage() {
         notes: "",
       };
 
-      // Step 1: Create order via protected endpoint
       const orderRes = await apiClient.post<any>(endpoints.createOrder, orderPayload);
       const order = orderRes?.data || orderRes;
       const orderId = order?._id || order?.id;
@@ -221,7 +250,6 @@ export default function CheckoutPage() {
       localStorage.setItem("currentOrder", JSON.stringify(order));
       localStorage.removeItem("cart");
 
-      // ── Bank Transfer Processing ──────────────────────────────────────────
       if (paymentMethod === "transfer") {
         if (order?.payment?.bankDetails) {
           setLiveBankDetails({
@@ -238,7 +266,6 @@ export default function CheckoutPage() {
             paymentReference: order.payment?.reference || order.paymentReference,
           });
         } else if (order?.paymentReference || order?.payment?.reference) {
-          // Additional fallback parser configuration using document keys
           setLiveBankDetails(prev => ({
             ...prev,
             paymentReference: order?.paymentReference || order?.payment?.reference
@@ -252,7 +279,6 @@ export default function CheckoutPage() {
         return;
       }
 
-      // ── Paystack Card Payment Initialization ──────────────────────────────
       const payRes = await apiClient.post<any>(endpoints.initializePayment, {
         type: "order",
         referenceId: orderId,
@@ -304,7 +330,6 @@ export default function CheckoutPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
 
             {/* Customer Details */}
@@ -371,8 +396,6 @@ export default function CheckoutPage() {
                 <h2 className="text-xl font-bold text-dark-gray">Payment Method</h2>
               </div>
               <div className="space-y-4">
-
-                {/* Paystack */}
                 <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "card" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
                   <input type="radio" name="payment" value="card" checked={paymentMethod === "card"} onChange={(e) => setPaymentMethod(e.target.value)} className="w-5 h-5 text-primary-gold focus:ring-primary-gold mt-1" />
                   <div className="ml-4 flex-1">
@@ -388,7 +411,6 @@ export default function CheckoutPage() {
                   </div>
                 </label>
 
-                {/* Bank Transfer */}
                 <label className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all ${paymentMethod === "transfer" ? "border-primary-gold bg-yellow-50" : "border-gray-200 hover:border-gray-300"}`}>
                   <input type="radio" name="payment" value="transfer" checked={paymentMethod === "transfer"} onChange={(e) => setPaymentMethod(e.target.value)} className="w-5 h-5 text-primary-gold focus:ring-primary-gold mt-1" />
                   <div className="ml-4 flex-1">
@@ -428,14 +450,12 @@ export default function CheckoutPage() {
                           </select>
                         </div>
 
-                        {/* ── Transfer Reference Container ── */}
                         {orderPlaced && (
                           <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg space-y-3">
                             <div className="flex items-center gap-2">
                               <CheckCircle size={18} className="text-green-500" />
                               <p className="text-sm font-semibold text-green-700">Order created! Now confirm your payment.</p>
                             </div>
-
                             {liveBankDetails.paymentReference && (
                               <div className="flex items-center justify-between p-3 bg-white border border-green-200 rounded-lg">
                                 <div>
@@ -445,7 +465,6 @@ export default function CheckoutPage() {
                                 <button type="button" onClick={() => copyToClipboard(liveBankDetails.paymentReference!, "Payment reference")} className="p-2 hover:bg-gray-100 rounded"><Copy size={16} /></button>
                               </div>
                             )}
-
                             <p className="text-xs text-green-600">
                               Transfer <span className="font-bold">{formatPrice(calculateTotal())}</span> to the account above
                               {liveBankDetails.paymentReference && <span>, using the reference above as narration</span>}.
@@ -486,9 +505,7 @@ export default function CheckoutPage() {
                 onClick={handleProceed}
                 disabled={isProcessing || orderPlaced}
                 className={`w-full font-bold py-4 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${
-                  isProcessing || orderPlaced
-                    ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                    : "bg-primary-gold hover:bg-yellow-500 text-black"
+                  isProcessing || orderPlaced ? "bg-gray-400 text-gray-600 cursor-not-allowed" : "bg-primary-gold hover:bg-yellow-500 text-black"
                 }`}
               >
                 {isProcessing && <Loader className="w-4 h-4 animate-spin" />}
@@ -506,7 +523,7 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Right Column - Order Summary */}
+          {/* Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
               <h2 className="text-xl font-bold text-dark-gray mb-6">Order Summary</h2>

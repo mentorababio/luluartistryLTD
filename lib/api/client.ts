@@ -1,32 +1,56 @@
-const BASE_URL = ""
+const BASE_URL = "https://luluartistry-backend.onrender.com"; 
 
 const getToken = () => typeof window !== "undefined" ? localStorage.getItem("token") : null;
+const authHeaders = () => {
+  const token = getToken();
 
-const authHeaders = () => ({
-  "Content-Type": "application/json",
-  ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-});
+  console.log("TOKEN FROM STORAGE:", token);
 
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  console.log("FINAL HEADERS:", headers);
+
+  return headers;
+};
 export const apiClient = {
   post: async <T = any>(endpoint: string, data?: any): Promise<T> => {
     const url = `${BASE_URL}${endpoint}`;
-    console.log(`[API CALL] POST ${url}`); // CHECK THIS IN BROWSER CONSOLE
+    console.log(`[API CALL] POST ${url}`);
+    
     const res = await fetch(url, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error(`API Error: ${res.status}`);
-    return res.json();
+
+    const text = await res.text();
+
+    if (!res.ok || text.trim().startsWith('<')) {
+      console.error("SERVER ERROR RESPONSE:", text);
+      throw new Error(`API Error ${res.status}: The server returned an invalid response.`);
+    }
+
+    return JSON.parse(text);
   },
-  // ... (keep your other methods: get, put, patch, delete)
+
+  get: async <T = any>(endpoint: string): Promise<T> => {
+    const res = await fetch(`${BASE_URL}${endpoint}`, {
+      method: "GET",
+      headers: authHeaders(),
+    });
+    const text = await res.text();
+    if (!res.ok || text.trim().startsWith('<')) throw new Error(`API Error: ${res.status}`);
+    return JSON.parse(text);
+  },
 };
 
 export const endpoints = {
-  // ... (auth endpoints)
-  createOrder: "/orders", // Correct: No trailing slash
-  myOrders: "/orders/my",
-  myOrder: (id: string) => `/orders/my/${id}`,
-  cancelOrder: (id: string) => `/orders/${id}/cancel`,
-  // ... (rest of the endpoints)
+  // Matched to router.post('/checkout', ...) in orderRoutes.js
+  createOrder: "/api/orders/checkout", 
+  myOrders: "/api/orders/my",
+  myOrder: (id: string) => `/api/orders/my/${id}`,
+  cancelOrder: (id: string) => `/api/orders/${id}/cancel`,
 };

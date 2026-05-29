@@ -1,3 +1,4 @@
+"use client";
 import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Eye, Search, Filter, Loader, X, Copy, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";

@@ -48,9 +48,10 @@ export const apiClient = {
 };
 
 export const endpoints = {
-  // Matched to router.post('/checkout', ...) in orderRoutes.js
-  createOrder: "/api/orders/checkout", 
-  myOrders: "/api/orders/my",
-  myOrder: (id: string) => `/api/orders/my/${id}`,
-  cancelOrder: (id: string) => `/api/orders/${id}/cancel`,
+  createOrder:        "/api/orders/checkout",
+  myOrders:           "/api/orders/my",
+  myOrder:            (id: string) => `/api/orders/my/${id}`,
+  cancelOrder:        (id: string) => `/api/orders/${id}/cancel`,
+  initializePayment:  "/api/payment/initialize",
+  verifyPayment:      (ref: string) => `/api/payment/verify/${ref}`,
 };

@@ -11,36 +11,68 @@ type OrderStatus = "pending" | "processing" | "shipped" | "delivered" | "cancell
 interface Order {
   _id: string;
   id?: string;
-  status: OrderStatus;
-  items: Array<{ product: string; name?: string; image?: string; quantity: number; price: number }>;
-  totalAmount: number;
+  orderStatus: OrderStatus;   // ← backend uses orderStatus not status
+  status?: OrderStatus;
+  items: Array<{
+    product: any;
+    productSnapshot?: { name?: string; image?: string; price?: number };
+    name?: string;
+    image?: string;
+    quantity: number;
+    price: number;
+    subtotal?: number;
+  }>;
+  pricing?: { total: number; subtotal: number; shippingCost: number };
+  totalAmount?: number;       // fallback
   createdAt: string;
+  orderNumber?: string;
 }
 
-const STATUS_TABS = ["All", "Processing", "Shipped", "Delivered", "Cancelled"];
+const STATUS_TABS = ["All", "Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
 const STATUS_COLORS: Record<string, string> = {
   shipped:    "bg-purple-100 text-purple-600",
   delivered:  "bg-green-100 text-green-600",
   processing: "bg-orange-100 text-orange-600",
   cancelled:  "bg-red-100 text-red-600",
-  pending:    "bg-gray-100 text-gray-600",
+  pending:    "bg-yellow-100 text-yellow-600",
 };
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
-  return `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}/${d.getFullYear()}`;
+  return `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d
+    .getDate()
+    .toString()
+    .padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 function formatPrice(amount: number) {
   return `₦${amount.toLocaleString()}`;
 }
 
+function getOrderStatus(order: Order): OrderStatus {
+  return order.orderStatus || order.status || "pending";
+}
+
+function getOrderTotal(order: Order): number {
+  return order.pricing?.total || order.totalAmount || 0;
+}
+
+function getItemName(item: Order["items"][0]): string {
+  return item.productSnapshot?.name || item.name ||
+    (typeof item.product === "object" ? item.product?.name : "") || "Item";
+}
+
+function getItemImage(item: Order["items"][0]): string | null {
+  return item.productSnapshot?.image || item.image ||
+    (typeof item.product === "object" ? item.product?.images?.[0]?.url : null) || null;
+}
+
 function OrderCard({ order }: { order: Order }) {
   const id = order._id || order.id || "";
-  const itemNames = order.items
-    .map((i) => `${i.name || "Item"}`)
-    .join(", ");
+  const status = getOrderStatus(order);
+  const total = getOrderTotal(order);
+  const itemNames = order.items.map((i) => getItemName(i)).join(", ");
 
   return (
     <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -48,30 +80,33 @@ function OrderCard({ order }: { order: Order }) {
         <div>
           <p className="text-xs text-gray-400 mb-0.5">Order ID</p>
           <p className="font-semibold text-gray-800 text-sm">
-            ORD-{id.slice(-8).toUpperCase()}
+            {order.orderNumber || `ORD-${id.slice(-8).toUpperCase()}`}
           </p>
         </div>
-        <span className={`text-xs font-medium px-3 py-1 rounded-full capitalize ${STATUS_COLORS[order.status] || STATUS_COLORS.pending}`}>
-          {order.status}
+        <span className={`text-xs font-medium px-3 py-1 rounded-full capitalize ${STATUS_COLORS[status] || "bg-gray-100 text-gray-600"}`}>
+          {status}
         </span>
       </div>
 
       <div className="flex gap-2 mb-3">
-        {order.items.slice(0, 2).map((item, i) => (
-          <div key={i} className="w-16 h-16 bg-[#fdf6ec] rounded-lg flex items-center justify-center border border-gray-100">
-            {item.image ? (
-              <img src={item.image} alt={item.name} className="w-full h-full object-cover rounded-lg" />
-            ) : (
-              <Package size={24} className="text-gray-300" />
-            )}
-          </div>
-        ))}
+        {order.items.slice(0, 2).map((item, i) => {
+          const img = getItemImage(item);
+          return (
+            <div key={i} className="w-16 h-16 bg-[#fdf6ec] rounded-lg flex items-center justify-center border border-gray-100">
+              {img ? (
+                <img src={img} alt={getItemName(item)} className="w-full h-full object-cover rounded-lg" />
+              ) : (
+                <Package size={24} className="text-gray-300" />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <p className="text-sm text-gray-700 mb-1 truncate">{itemNames}</p>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-400">{formatDate(order.createdAt)}</p>
-        <p className="text-sm font-semibold text-gray-800">{formatPrice(order.totalAmount)}</p>
+        <p className="text-sm font-semibold text-gray-800">{formatPrice(total)}</p>
       </div>
 
       <Link href={`/orders/${id}`}>
@@ -95,21 +130,26 @@ export default function OrdersPage() {
     const token = localStorage.getItem("token");
     if (!token) { router.push("/login"); return; }
 
-    // Correct endpoint: GET /orders/my
-    apiClient.get<any>("/orders/my")
+    apiClient.get<any>("/api/orders/my")
       .then((data) => {
-        setOrders(data?.data || data || []);
+        const list = data?.data || data || [];
+        setOrders(Array.isArray(list) ? list : []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        console.error("Failed to fetch orders:", err);
+        setLoading(false);
+      });
   }, [router]);
 
   const filtered = orders.filter((o) => {
-    const matchesTab = activeTab === "All" || o.status.toLowerCase() === activeTab.toLowerCase();
+    const status = getOrderStatus(o);
+    const matchesTab = activeTab === "All" || status.toLowerCase() === activeTab.toLowerCase();
     const id = o._id || o.id || "";
     const matchesSearch = !search ||
       id.toLowerCase().includes(search.toLowerCase()) ||
-      o.items.some((i) => i.name?.toLowerCase().includes(search.toLowerCase()));
+      (o.orderNumber || "").toLowerCase().includes(search.toLowerCase()) ||
+      o.items.some((i) => getItemName(i).toLowerCase().includes(search.toLowerCase()));
     return matchesTab && matchesSearch;
   });
 

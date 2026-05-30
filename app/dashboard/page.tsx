@@ -63,14 +63,19 @@ export default function DashboardPage() {
       .then((data) => { if (data?.data) setUser(data.data); setLoading(false); })
       .catch(() => router.push("/login"));
 
-    fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => res.json())
-      .then((data) => {
-        const orders = data?.data || [];
-        setOrderCount(orders.length);
-        if (orders.length > 0) setLatestOrder(orders[orders.length - 1]);
-      })
-      .catch(() => {});
+    fetch("https://luluartistry-backend.onrender.com/api/orders/my", {
+  headers: { Authorization: `Bearer ${token}` },
+})
+  .then((res) => res.json())
+  .then((data) => {
+    const orders = data?.data || [];
+    setOrderCount(orders.length);
+    if (orders.length > 0) {
+      const latest = orders[0]; // sorted newest first
+      setLatestOrder(latest);
+    }
+  })
+  .catch(() => {});
 
     const savedWishlist = localStorage.getItem("wishlist");
     if (savedWishlist) {
@@ -215,9 +220,9 @@ export default function DashboardPage() {
               </div>
               <div className="text-sm text-gray-500 mb-1">Latest Order</div>
               <div className="text-sm text-gray-800 mb-3">
-                {latestOrder
-                  ? `ORD-${latestOrder.id?.slice(0, 8).toUpperCase()}`
-                  : <span className="text-gray-400">No orders yet</span>}
+               {latestOrder
+  ? latestOrder.orderNumber || `ORD-${(latestOrder._id || latestOrder.id || "").slice(-8).toUpperCase()}`
+  : <span className="text-gray-400">No orders yet</span>}
               </div>
               <Link href="/orders">
                 <button className="border border-[#C9A84C] text-[#C9A84C] text-sm px-4 py-1.5 rounded hover:bg-[#C9A84C] hover:text-white transition-colors">

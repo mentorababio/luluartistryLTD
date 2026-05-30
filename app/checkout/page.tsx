@@ -215,12 +215,16 @@ export default function CheckoutPage() {
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
 
-      const orderPayload = {
-        items: cartItems.map((item) => ({
-          product: item.id,
-          quantity: item.quantity || 1,
-          price: item.price,
-        })),
+      const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+const orderPayload = {
+  orderNumber,
+  items: cartItems.map((item) => ({
+    product: item.id,
+    quantity: item.quantity || 1,
+    price: item.price,
+    subtotal: item.price * (item.quantity || 1),
+  })),
         customerInfo: {
           firstName,
           lastName,

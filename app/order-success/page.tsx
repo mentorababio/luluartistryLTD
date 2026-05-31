@@ -27,7 +27,6 @@ function OrderSuccessContent() {
       return;
     }
 
-    // ── Verify via Render backend (public endpoint, no auth needed) ──────────
     fetch(`${BASE_URL}/payment/verify/${reference}`)
       .then((res) => res.json())
       .then((data) => {
@@ -41,17 +40,48 @@ function OrderSuccessContent() {
       .catch(() => setStatus("failed"));
   }, [reference]);
 
+  // ── FIX: get total from either pricing.total or totalAmount ──────────────
+  const getTotal = (order: any): number => {
+    if (!order) return 0;
+    return order.pricing?.total || order.totalAmount || 0;
+  };
+
+  const getShipping = (order: any): number => {
+    if (!order) return 0;
+    return order.pricing?.shippingCost || order.deliveryZone?.cost || 0;
+  };
+
+  const getSubtotal = (order: any): number => {
+    if (!order) return 0;
+    return order.pricing?.subtotal || (getTotal(order) - getShipping(order));
+  };
+
+  // ── Get bank details from order or fallback to env defaults ──────────────
+  const getBankDetails = (order: any) => {
+    const bankDetails = order?.bankDetails || order?.payment?.bankDetails;
+    return {
+      bankName:      bankDetails?.bankName      || process.env.NEXT_PUBLIC_BANK_NAME      || 'GTBank',
+      accountNumber: bankDetails?.accountNumber || process.env.NEXT_PUBLIC_ACCOUNT_NUMBER || '0123456789',
+      accountName:   bankDetails?.accountName   || process.env.NEXT_PUBLIC_ACCOUNT_NAME   || 'Lulu Artistry',
+      reference:     order?.payment?.reference  || order?.paymentReference || '',
+    };
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const handleDownloadReceipt = () => {
     if (!order) return;
-
     const rawId = order._id || order.id || "";
     const orderId = `ORD-${rawId.slice(-8).toUpperCase()}`;
     const date = new Date().toLocaleDateString("en-NG", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
     const items = order.items?.map((item: any) =>
-      `  - ${item.name || item.product} x${item.quantity}  ₦${(item.price * item.quantity).toLocaleString()}`
+      `  - ${item.productSnapshot?.name || item.name || item.product} x${item.quantity}  ₦${((item.price || 0) * item.quantity).toLocaleString()}`
     ).join("\n") || "  - Items unavailable";
+
+    const total = getTotal(order);
+    const shipping = getShipping(order);
+    const subtotal = getSubtotal(order);
 
     const receipt = `
 ================================================
@@ -68,9 +98,9 @@ ITEMS ORDERED:
 ${items}
 
 ------------------------------------------------
-Subtotal:    ₦${(order.totalAmount - (order.deliveryZone?.cost || 0)).toLocaleString()}
-Shipping:    ₦${(order.deliveryZone?.cost || 0).toLocaleString()}
-TOTAL:       ₦${order.totalAmount?.toLocaleString()}
+Subtotal:    ₦${subtotal.toLocaleString()}
+Shipping:    ₦${shipping.toLocaleString()}
+TOTAL:       ₦${total.toLocaleString()}
 
 ------------------------------------------------
 SHIPPING ADDRESS:
@@ -134,6 +164,8 @@ ${order.customerInfo?.phone || ""}
   }
 
   const rawId = order?._id || order?.id || "";
+  const total = getTotal(order);
+  const bankDetails = getBankDetails(order);
 
   return (
     <div className="min-h-screen bg-[#fffaf5] flex flex-col items-center justify-center px-4 py-12">
@@ -162,8 +194,9 @@ ${order.customerInfo?.phone || ""}
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Total</span>
+              {/* ── FIX: use getTotal() instead of order.totalAmount ── */}
               <span className="font-semibold text-gray-800">
-                ₦{order.totalAmount?.toLocaleString()}
+                ₦{total.toLocaleString()}
               </span>
             </div>
             {paymentInfo && (
@@ -188,11 +221,17 @@ ${order.customerInfo?.phone || ""}
         {status === "transfer" && (
           <div className="bg-yellow-50 border border-[#C9A84C] rounded-xl p-4 mb-6 text-left">
             <p className="text-sm font-semibold text-gray-700 mb-2">Transfer to:</p>
-            <p className="text-sm text-gray-600">Bank: <span className="font-medium">GTBank</span></p>
-            <p className="text-sm text-gray-600">Account: <span className="font-medium">0123456789</span></p>
-            <p className="text-sm text-gray-600">Name: <span className="font-medium">Lulu Artistry</span></p>
+            <p className="text-sm text-gray-600">Bank: <span className="font-medium">{bankDetails.bankName}</span></p>
+            <p className="text-sm text-gray-600">Account: <span className="font-medium">{bankDetails.accountNumber}</span></p>
+            <p className="text-sm text-gray-600">Name: <span className="font-medium">{bankDetails.accountName}</span></p>
+            {bankDetails.reference && (
+              <p className="text-sm text-gray-600 mt-1">
+                Reference: <span className="font-medium text-[#C9A84C]">{bankDetails.reference}</span>
+              </p>
+            )}
+            {/* ── FIX: use getTotal() for amount display ── */}
             <p className="text-sm text-gray-600 mt-2">
-              Amount: <span className="font-bold text-[#C9A84C]">₦{order?.totalAmount?.toLocaleString()}</span>
+              Amount: <span className="font-bold text-[#C9A84C]">₦{total.toLocaleString()}</span>
             </p>
           </div>
         )}

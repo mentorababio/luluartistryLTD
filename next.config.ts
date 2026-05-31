@@ -8,17 +8,14 @@ const nextConfig: NextConfig = {
 		ignoreBuildErrors: true,
 	},
 	images: {
-		remotePatterns: [
-			{
-				protocol: 'https',
-				hostname: 'via.placeholder.com',
-			},
-			{
-				protocol: 'https',
-				hostname: '**',
-			},
-		],
-	},
+  remotePatterns: [
+    {
+      protocol: 'https',
+      hostname: 'res.cloudinary.com',
+    }
+  ],
+  unoptimized: false,
+}
 
 };
 

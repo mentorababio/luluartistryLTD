@@ -294,30 +294,42 @@ export default function ProductsPage() {
   };
 
   const ImageField = () => (
-    <div>
-      <label className="block text-sm font-semibold text-gray-700 mb-2">Product Image</label>
-      {imagePreview && (
-        <div className="relative w-full h-40 mb-2 rounded-lg overflow-hidden bg-gray-100">
-          <Image src={imagePreview} alt="Preview" fill className="object-cover" />
-        </div>
-      )}
+  <div>
+    <label className="block text-sm font-semibold text-gray-700 mb-2">Product Image</label>
+    {imagePreview && (
+      <div className="relative w-full h-40 mb-2 rounded-lg overflow-hidden bg-gray-100">
+        <Image src={imagePreview} alt="Preview" fill className="object-cover" unoptimized />
+      </div>
+    )}
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
         <input type="file" accept="image/*" id="img-upload" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }} />
         <label htmlFor="img-upload"
           className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm">
           {uploadingImage ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}
-          {uploadingImage ? "Uploading..." : "Choose Image"}
+          {uploadingImage ? "Uploading..." : "Upload Image"}
         </label>
         {imagePreview && (
           <button onClick={() => { setImagePreview(""); setFormData(p => ({ ...p, imageUrl: "" })); }}
             className="text-red-500 hover:text-red-700 text-sm">Remove</button>
         )}
       </div>
-      <p className="text-xs text-gray-400 mt-1">JPG, PNG up to 5MB</p>
+      <p className="text-xs text-gray-400">— or paste an image URL —</p>
+      <input
+        type="text"
+        placeholder="https://example.com/image.jpg"
+        value={formData.imageUrl}
+        onChange={(e) => {
+          setFormData(p => ({ ...p, imageUrl: e.target.value }));
+          setImagePreview(e.target.value);
+        }}
+        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+      />
     </div>
-  );
-
+    <p className="text-xs text-gray-400 mt-1">JPG, PNG up to 5MB or paste a URL</p>
+  </div>
+);
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

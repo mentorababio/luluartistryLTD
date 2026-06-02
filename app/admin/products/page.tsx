@@ -135,9 +135,11 @@ export default function ProductsPage() {
     try {
       const token = getToken();
       const fd = new FormData();
-      fd.append("image", file);
+      fd.append("images", file); // ✅ IMPORTANT: backend expects 'images' array field
 
-      console.log("Starting image upload...");
+      console.log("Starting image upload to backend...");
+      console.log("File:", file.name, file.size, file.type);
+
       const res = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -148,32 +150,40 @@ export default function ProductsPage() {
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("Upload error:", errorText);
-        toast.error(`Upload failed: ${res.status}. Please check backend logs.`);
+        console.error("Upload error response:", errorText);
+        toast.error(`Upload failed: ${res.status}. Backend issue.`);
         setUploadingImage(false);
         return;
       }
 
       const json = await res.json();
-      console.log("Upload response:", json);
+      console.log("Upload response JSON:", json);
       
-      const url = json?.data?.url || json?.url;
-      
-      if (!url) {
-        toast.error("No image URL returned from server. Check backend response.");
+      // Backend returns { success: true, images: [...] }
+      if (!json.success || !json.images || json.images.length === 0) {
+        toast.error("Upload failed: No images returned from backend");
         setUploadingImage(false);
         return;
       }
 
-      if (!url.startsWith("http")) {
-        toast.error(`Invalid URL format returned: ${url}`);
+      const imageUrl = json.images[0]?.url || json.images[0];
+      console.log("Got image URL:", imageUrl);
+      
+      if (!imageUrl) {
+        toast.error("No image URL returned from server");
         setUploadingImage(false);
         return;
       }
 
-      // Show the uploaded URL
-      setImagePreview(url);
-      setFormData(prev => ({ ...prev, imageUrl: url }));
+      if (!imageUrl.startsWith("http")) {
+        toast.error(`Invalid URL format: ${imageUrl}`);
+        setUploadingImage(false);
+        return;
+      }
+
+      // ✅ Show the uploaded URL
+      setImagePreview(imageUrl);
+      setFormData(prev => ({ ...prev, imageUrl }));
       toast.success("Image uploaded successfully!");
       
     } catch (err) {

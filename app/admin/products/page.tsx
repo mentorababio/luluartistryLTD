@@ -54,11 +54,13 @@ export default function ProductsPage() {
       const transformed = list.map((p: any) => ({
         id: p._id || p.id,
         name: p.name,
-        category: p.category, // keep full object
+        category: p.category,
         price: p.price,
         stock: p.stock ?? 0,
-        // ── FIX: correctly extract image URL from images array ────────────
-        image: (p.images && p.images[0] && p.images[0].url) || p.image || "/placeholder-product.jpg",
+        // Filter out blob URLs - only show valid HTTP URLs
+        image: (p.images && p.images[0]?.url && p.images[0].url.startsWith("http")) 
+          ? p.images[0].url 
+          : "/placeholder-product.jpg",
         rating: p.averageRating || p.rating || 4,
       }));
 
@@ -126,7 +128,6 @@ export default function ProductsPage() {
                catId === selectedCat.id ||
                catName === selectedCat.slug;
       });
-  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Upload image to Cloudinary via backend ────────────────────────────────
   const handleImageUpload = async (file: File) => {
@@ -136,29 +137,47 @@ export default function ProductsPage() {
       const fd = new FormData();
       fd.append("image", file);
 
+      console.log("Starting image upload...");
       const res = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: fd
       });
 
+      console.log("Upload response status:", res.status);
+
       if (!res.ok) {
-        toast.error("Image upload failed. Please try again.");
+        const errorText = await res.text();
+        console.error("Upload error:", errorText);
+        toast.error(`Upload failed: ${res.status}. Please check backend logs.`);
         setUploadingImage(false);
         return;
       }
 
       const json = await res.json();
+      console.log("Upload response:", json);
+      
       const url = json?.data?.url || json?.url;
-      if (url) {
-        // Show the uploaded URL (not blob)
-        setImagePreview(url);
-        setFormData(prev => ({ ...prev, imageUrl: url }));
-        toast.success("Image uploaded successfully!");
-      } else {
-        toast.error("No image URL returned from server");
+      
+      if (!url) {
+        toast.error("No image URL returned from server. Check backend response.");
+        setUploadingImage(false);
+        return;
       }
+
+      if (!url.startsWith("http")) {
+        toast.error(`Invalid URL format returned: ${url}`);
+        setUploadingImage(false);
+        return;
+      }
+
+      // Show the uploaded URL
+      setImagePreview(url);
+      setFormData(prev => ({ ...prev, imageUrl: url }));
+      toast.success("Image uploaded successfully!");
+      
     } catch (err) {
+      console.error("Upload exception:", err);
       toast.error("Image upload failed: " + (err as Error).message);
     } finally {
       setUploadingImage(false);
@@ -183,6 +202,11 @@ export default function ProductsPage() {
     
     if (!formData.imageUrl) {
       toast.error("Please upload a product image");
+      return;
+    }
+
+    if (!formData.imageUrl.startsWith("http")) {
+      toast.error("Invalid image URL. Please upload an image properly.");
       return;
     }
 

@@ -8,9 +8,13 @@ const nextConfig: NextConfig = {
 		ignoreBuildErrors: true,
 	},
 	images: {
-  domains: ['res.cloudinary.com', 'placehold.co'],
-}
-
+		remotePatterns: [
+			{ protocol: 'https', hostname: 'res.cloudinary.com' },
+			{ protocol: 'https', hostname: 'placehold.co' },
+			{ protocol: 'https', hostname: 'luluartistry-backend.onrender.com' }
+		],
+		qualities: [75, 90],
+	}
 };
 
 export default nextConfig;

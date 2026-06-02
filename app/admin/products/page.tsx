@@ -134,7 +134,7 @@ export default function ProductsPage() {
     try {
       const token = getToken();
       const fd = new FormData();
-      fd.append("images", file);
+      fd.append("image", file);
 
       const res = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
         method: "POST",

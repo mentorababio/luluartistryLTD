@@ -143,25 +143,23 @@ export default function ProductsPage() {
       });
 
       if (!res.ok) {
-        // Fallback: use object URL as preview, save file for later
-        const objectUrl = URL.createObjectURL(file);
-        setImagePreview(objectUrl);
-        setFormData(prev => ({ ...prev, imageUrl: objectUrl }));
-        toast("Image preview set. Note: upload endpoint not available.", { icon: "⚠️" });
+        toast.error("Image upload failed. Please try again.");
+        setUploadingImage(false);
         return;
       }
 
       const json = await res.json();
       const url = json?.data?.url || json?.url;
       if (url) {
+        // Show the uploaded URL (not blob)
         setImagePreview(url);
         setFormData(prev => ({ ...prev, imageUrl: url }));
-        toast.success("Image uploaded!");
+        toast.success("Image uploaded successfully!");
+      } else {
+        toast.error("No image URL returned from server");
       }
     } catch (err) {
-      const objectUrl = URL.createObjectURL(file);
-      setImagePreview(objectUrl);
-      toast("Using local preview only.", { icon: "⚠️" });
+      toast.error("Image upload failed: " + (err as Error).message);
     } finally {
       setUploadingImage(false);
     }
@@ -182,6 +180,12 @@ export default function ProductsPage() {
       toast.error("Please fill in all required fields");
       return;
     }
+    
+    if (!formData.imageUrl) {
+      toast.error("Please upload a product image");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const token = getToken();
@@ -194,9 +198,7 @@ export default function ProductsPage() {
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
           description: formData.description || "",
-        ...(formData.imageUrl && (formData.imageUrl.startsWith("http") || formData.imageUrl.startsWith("blob:")) && {
-  images: [{ url: formData.imageUrl, alt: formData.name }]
-})
+          images: [{ url: formData.imageUrl, alt: formData.name }]
         })
       });
       const json = await res.json();
@@ -220,22 +222,28 @@ export default function ProductsPage() {
       toast.error("Please fill in all required fields");
       return;
     }
+
     setIsSubmitting(true);
     try {
       const token = getToken();
+      
+      const body: any = {
+        name: formData.name,
+        category: formData.category,
+        price: parseFloat(formData.price),
+        stock: parseInt(formData.stock),
+        description: formData.description || ""
+      };
+
+      // Only update image if it was changed and is a valid HTTP URL
+      if (formData.imageUrl && formData.imageUrl.startsWith("http")) {
+        body.images = [{ url: formData.imageUrl, alt: formData.name }];
+      }
+
       const res = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          category: formData.category,
-          price: parseFloat(formData.price),
-          stock: parseInt(formData.stock),
-          description: formData.description || "",
-         ...(formData.imageUrl && (formData.imageUrl.startsWith("http") || formData.imageUrl.startsWith("blob:")) && {
-  images: [{ url: formData.imageUrl, alt: formData.name }]
-})
-        })
+        body: JSON.stringify(body)
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || json.message || "Failed to update product");

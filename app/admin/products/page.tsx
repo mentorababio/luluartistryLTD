@@ -194,9 +194,9 @@ export default function ProductsPage() {
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
           description: formData.description || "",
-          ...(formData.imageUrl && formData.imageUrl.startsWith("http") && {
-            images: [{ url: formData.imageUrl, alt: formData.name }]
-          })
+        ...(formData.imageUrl && (formData.imageUrl.startsWith("http") || formData.imageUrl.startsWith("blob:")) && {
+  images: [{ url: formData.imageUrl, alt: formData.name }]
+})
         })
       });
       const json = await res.json();
@@ -232,9 +232,9 @@ export default function ProductsPage() {
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
           description: formData.description || "",
-          ...(formData.imageUrl && formData.imageUrl.startsWith("http") && {
-            images: [{ url: formData.imageUrl, alt: formData.name }]
-          })
+         ...(formData.imageUrl && (formData.imageUrl.startsWith("http") || formData.imageUrl.startsWith("blob:")) && {
+  images: [{ url: formData.imageUrl, alt: formData.name }]
+})
         })
       });
       const json = await res.json();

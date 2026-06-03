@@ -24,8 +24,6 @@ interface Category {
 }
 
 export default function ProductsPage() {
-  // Add this with your other useState lines at the top
-const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
@@ -56,11 +54,13 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null);
       const transformed = list.map((p: any) => ({
         id: p._id || p.id,
         name: p.name,
-        category: p.category, // keep full object
+        category: p.category,
         price: p.price,
         stock: p.stock ?? 0,
-        // ── FIX: correctly extract image URL from images array ────────────
-        image: (p.images && p.images[0] && p.images[0].url) || p.image || "/placeholder-product.jpg",
+        // Filter out blob URLs - only show valid HTTP URLs
+        image: (p.images && p.images[0]?.url && p.images[0].url.startsWith("http")) 
+          ? p.images[0].url 
+          : "/placeholder-product.jpg",
         rating: p.averageRating || p.rating || 4,
       }));
 
@@ -128,7 +128,71 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null);
                catId === selectedCat.id ||
                catName === selectedCat.slug;
       });
-  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Upload image to Cloudinary via backend ────────────────────────────────
+  const handleImageUpload = async (file: File) => {
+    setUploadingImage(true);
+    try {
+      const token = getToken();
+      const fd = new FormData();
+      fd.append("images", file); // ✅ IMPORTANT: backend expects 'images' array field
+
+      console.log("Starting image upload to backend...");
+      console.log("File:", file.name, file.size, file.type);
+
+      const res = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd
+      });
+
+      console.log("Upload response status:", res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Upload error response:", errorText);
+        toast.error(`Upload failed: ${res.status}. Backend issue.`);
+        setUploadingImage(false);
+        return;
+      }
+
+      const json = await res.json();
+      console.log("Upload response JSON:", json);
+      
+      // Backend returns { success: true, images: [...] }
+      if (!json.success || !json.images || json.images.length === 0) {
+        toast.error("Upload failed: No images returned from backend");
+        setUploadingImage(false);
+        return;
+      }
+
+      const imageUrl = json.images[0]?.url || json.images[0];
+      console.log("Got image URL:", imageUrl);
+      
+      if (!imageUrl) {
+        toast.error("No image URL returned from server");
+        setUploadingImage(false);
+        return;
+      }
+
+      if (!imageUrl.startsWith("http")) {
+        toast.error(`Invalid URL format: ${imageUrl}`);
+        setUploadingImage(false);
+        return;
+      }
+
+      // ✅ Show the uploaded URL
+      setImagePreview(imageUrl);
+      setFormData(prev => ({ ...prev, imageUrl }));
+      toast.success("Image uploaded successfully!");
+      
+    } catch (err) {
+      console.error("Upload exception:", err);
+      toast.error("Image upload failed: " + (err as Error).message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const getStockStatus = (stock: number) => {
     if (stock === 0) return { text: "Out of stock", color: "text-red-600" };
@@ -140,57 +204,27 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const formatPrice = (price: number) => `₦${price.toLocaleString("en-NG")}`;
 
   // ── Add product ───────────────────────────────────────────────────────────
- const handleAddProduct = async () => {
-  if (!formData.name || !formData.category || !formData.price || !formData.stock) {
-    toast.error("Please fill in all required fields");
-    return;
-  }
-  setIsSubmitting(true);
-  try {
-    const token = getToken();
-    const fd = new FormData();
-    
-    // Add text data
-    fd.append("name", formData.name);
-    fd.append("category", formData.category);
-    fd.append("price", formData.price);
-    fd.append("stock", formData.stock);
-    fd.append("description", formData.description);
-    
-    // Add the file object
-    if (selectedFile) {
-      fd.append("images", selectedFile);
-    }
-
-    const res = await fetch(`${BASE_URL}/products`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` }, // Note: No Content-Type header
-      body: fd
-    });
-
-    if (!res.ok) throw new Error("Failed to add product");
-
-    toast.success("Product added successfully!");
-    setShowAddModal(false);
-    setSelectedFile(null); // Reset the file state
-    fetchProducts();
-  } catch (err: any) {
-    toast.error(err.message);
-  } finally {
-    setIsSubmitting(false);
-  }
-};
-  // ── Edit product ──────────────────────────────────────────────────────────
-  const handleEditProduct = async () => {
-    if (!selectedProduct || !formData.name || !formData.category || !formData.price || !formData.stock) {
+  const handleAddProduct = async () => {
+    if (!formData.name || !formData.category || !formData.price || !formData.stock) {
       toast.error("Please fill in all required fields");
       return;
     }
+    
+    if (!formData.imageUrl) {
+      toast.error("Please upload a product image");
+      return;
+    }
+
+    if (!formData.imageUrl.startsWith("http")) {
+      toast.error("Invalid image URL. Please upload an image properly.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const token = getToken();
-      const res = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
-        method: "PUT",
+      const res = await fetch(`${BASE_URL}/products`, {
+        method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.name,
@@ -198,10 +232,52 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null);
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
           description: formData.description || "",
-         ...(formData.imageUrl && (formData.imageUrl.startsWith("http") || formData.imageUrl.startsWith("blob:")) && {
-  images: [{ url: formData.imageUrl, alt: formData.name }]
-})
+          images: [{ url: formData.imageUrl, alt: formData.name }]
         })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || json.message || "Failed to add product");
+
+      toast.success("Product added successfully!");
+      setShowAddModal(false);
+      setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" });
+      setImagePreview("");
+      fetchProducts();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ── Edit product ──────────────────────────────────────────────────────────
+  const handleEditProduct = async () => {
+    if (!selectedProduct || !formData.name || !formData.category || !formData.price || !formData.stock) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const token = getToken();
+      
+      const body: any = {
+        name: formData.name,
+        category: formData.category,
+        price: parseFloat(formData.price),
+        stock: parseInt(formData.stock),
+        description: formData.description || ""
+      };
+
+      // Only update image if it was changed and is a valid HTTP URL
+      if (formData.imageUrl && formData.imageUrl.startsWith("http")) {
+        body.images = [{ url: formData.imageUrl, alt: formData.name }];
+      }
+
+      const res = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body)
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || json.message || "Failed to update product");
@@ -269,13 +345,7 @@ const [selectedFile, setSelectedFile] = useState<File | null>(null);
       )}
       <div className="flex items-center gap-2">
         <input type="file" accept="image/*" id="img-upload" className="hidden"
-         onChange={(e) => { 
-  const f = e.target.files?.[0]; 
-  if (f) {
-    setSelectedFile(f); // Save the file to a variable
-    setImagePreview(URL.createObjectURL(f)); // Show the preview
-  }
-}} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }} />
         <label htmlFor="img-upload"
           className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm">
           {uploadingImage ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}

@@ -24,6 +24,8 @@ interface Category {
 }
 
 export default function ProductsPage() {
+  // Add this with your other useState lines at the top
+const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
@@ -128,45 +130,6 @@ export default function ProductsPage() {
       });
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── Upload image to Cloudinary via backend ────────────────────────────────
-  const handleImageUpload = async (file: File) => {
-    setUploadingImage(true);
-    try {
-      const token = getToken();
-      const fd = new FormData();
-      fd.append("image", file);
-
-      const res = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd
-      });
-
-      if (!res.ok) {
-        // Fallback: use object URL as preview, save file for later
-        const objectUrl = URL.createObjectURL(file);
-        setImagePreview(objectUrl);
-        setFormData(prev => ({ ...prev, imageUrl: objectUrl }));
-        toast("Image preview set. Note: upload endpoint not available.", { icon: "⚠️" });
-        return;
-      }
-
-      const json = await res.json();
-      const url = json?.data?.url || json?.url;
-      if (url) {
-        setImagePreview(url);
-        setFormData(prev => ({ ...prev, imageUrl: url }));
-        toast.success("Image uploaded!");
-      }
-    } catch (err) {
-      const objectUrl = URL.createObjectURL(file);
-      setImagePreview(objectUrl);
-      toast("Using local preview only.", { icon: "⚠️" });
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
   const getStockStatus = (stock: number) => {
     if (stock === 0) return { text: "Out of stock", color: "text-red-600" };
     if (stock < 10) return { text: `${stock} units — Very low`, color: "text-red-600" };
@@ -177,43 +140,46 @@ export default function ProductsPage() {
   const formatPrice = (price: number) => `₦${price.toLocaleString("en-NG")}`;
 
   // ── Add product ───────────────────────────────────────────────────────────
-  const handleAddProduct = async () => {
-    if (!formData.name || !formData.category || !formData.price || !formData.stock) {
-      toast.error("Please fill in all required fields");
-      return;
+ const handleAddProduct = async () => {
+  if (!formData.name || !formData.category || !formData.price || !formData.stock) {
+    toast.error("Please fill in all required fields");
+    return;
+  }
+  setIsSubmitting(true);
+  try {
+    const token = getToken();
+    const fd = new FormData();
+    
+    // Add text data
+    fd.append("name", formData.name);
+    fd.append("category", formData.category);
+    fd.append("price", formData.price);
+    fd.append("stock", formData.stock);
+    fd.append("description", formData.description);
+    
+    // Add the file object
+    if (selectedFile) {
+      fd.append("images", selectedFile);
     }
-    setIsSubmitting(true);
-    try {
-      const token = getToken();
-      const res = await fetch(`${BASE_URL}/products`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          category: formData.category,
-          price: parseFloat(formData.price),
-          stock: parseInt(formData.stock),
-          description: formData.description || "",
-        ...(formData.imageUrl && (formData.imageUrl.startsWith("http") || formData.imageUrl.startsWith("blob:")) && {
-  images: [{ url: formData.imageUrl, alt: formData.name }]
-})
-        })
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || json.message || "Failed to add product");
 
-      toast.success("Product added successfully!");
-      setShowAddModal(false);
-      setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" });
-      setImagePreview("");
-      fetchProducts();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    const res = await fetch(`${BASE_URL}/products`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }, // Note: No Content-Type header
+      body: fd
+    });
 
+    if (!res.ok) throw new Error("Failed to add product");
+
+    toast.success("Product added successfully!");
+    setShowAddModal(false);
+    setSelectedFile(null); // Reset the file state
+    fetchProducts();
+  } catch (err: any) {
+    toast.error(err.message);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   // ── Edit product ──────────────────────────────────────────────────────────
   const handleEditProduct = async () => {
     if (!selectedProduct || !formData.name || !formData.category || !formData.price || !formData.stock) {
@@ -303,7 +269,13 @@ export default function ProductsPage() {
       )}
       <div className="flex items-center gap-2">
         <input type="file" accept="image/*" id="img-upload" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }} />
+         onChange={(e) => { 
+  const f = e.target.files?.[0]; 
+  if (f) {
+    setSelectedFile(f); // Save the file to a variable
+    setImagePreview(URL.createObjectURL(f)); // Show the preview
+  }
+}} />
         <label htmlFor="img-upload"
           className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 text-sm">
           {uploadingImage ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}

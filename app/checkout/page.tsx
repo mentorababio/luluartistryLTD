@@ -72,6 +72,27 @@ export default function CheckoutPage() {
     accountNumber: "0123456789",
     accountName: "Lulu Artistry",
   });
+  useEffect(() => {
+  const fetchBankDetails = async () => {
+    try {
+      // Use your apiClient or standard fetch
+      const res = await fetch(`${BASE_URL}/api/settings/public`);
+      const json = await res.json();
+
+      if (json.success && json.data.bank) {
+        setLiveBankDetails({
+          bankName: json.data.bank.bankName,
+          accountNumber: json.data.bank.accountNumber,
+          accountName: json.data.bank.accountName,
+        });
+      }
+    } catch (err) {
+      console.error("Could not fetch bank details", err);
+    }
+  };
+
+  fetchBankDetails();
+}, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");

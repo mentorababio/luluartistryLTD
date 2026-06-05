@@ -40,6 +40,7 @@ export default function ProductsPage() {
   });
   const [imagePreview, setImagePreview] = useState<string>("");
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const imageUrlRef = useRef<string>("");
 
   const getToken = () => localStorage.getItem("token");
 
@@ -57,9 +58,8 @@ export default function ProductsPage() {
         category: p.category,
         price: p.price,
         stock: p.stock ?? 0,
-        // Filter out blob URLs - only show valid HTTP URLs
-        image: (p.images && p.images[0]?.url && p.images[0].url.startsWith("http")) 
-          ? p.images[0].url 
+        image: (p.images && p.images[0]?.url && p.images[0].url.startsWith("http"))
+          ? p.images[0].url
           : "/placeholder-product.jpg",
         rating: p.averageRating || p.rating || 4,
       }));
@@ -104,7 +104,7 @@ export default function ProductsPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── FIX: Category filter — handle category as object or string ────────────
+  // ── Category helpers ──────────────────────────────────────────────────────
   const getCategoryName = (cat: any): string => {
     if (!cat) return "";
     if (typeof cat === "string") return cat;
@@ -135,10 +135,7 @@ export default function ProductsPage() {
     try {
       const token = getToken();
       const fd = new FormData();
-      fd.append("images", file); // ✅ IMPORTANT: backend expects 'images' array field
-
-      console.log("Starting image upload to backend...");
-      console.log("File:", file.name, file.size, file.type);
+      fd.append("images", file);
 
       const res = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
         method: "POST",
@@ -146,46 +143,33 @@ export default function ProductsPage() {
         body: fd
       });
 
-      console.log("Upload response status:", res.status);
-
       if (!res.ok) {
         const errorText = await res.text();
         console.error("Upload error response:", errorText);
         toast.error(`Upload failed: ${res.status}. Backend issue.`);
-        setUploadingImage(false);
         return;
       }
 
       const json = await res.json();
-      console.log("Upload response JSON:", json);
-      
-      // Backend returns { success: true, images: [...] }
+
       if (!json.success || !json.images || json.images.length === 0) {
         toast.error("Upload failed: No images returned from backend");
-        setUploadingImage(false);
         return;
       }
 
       const imageUrl = json.images[0]?.url || json.images[0];
-      console.log("Got image URL:", imageUrl);
-      
-      if (!imageUrl) {
-        toast.error("No image URL returned from server");
-        setUploadingImage(false);
+
+      if (!imageUrl || !imageUrl.startsWith("http")) {
+        toast.error("Invalid image URL returned from server");
         return;
       }
 
-      if (!imageUrl.startsWith("http")) {
-        toast.error(`Invalid URL format: ${imageUrl}`);
-        setUploadingImage(false);
-        return;
-      }
-
-      // ✅ Show the uploaded URL
+      // ✅ Set ref first — this is what handlers will read
+      imageUrlRef.current = imageUrl;
       setImagePreview(imageUrl);
       setFormData(prev => ({ ...prev, imageUrl }));
       toast.success("Image uploaded successfully!");
-      
+
     } catch (err) {
       console.error("Upload exception:", err);
       toast.error("Image upload failed: " + (err as Error).message);
@@ -209,14 +193,10 @@ export default function ProductsPage() {
       toast.error("Please fill in all required fields");
       return;
     }
-    
-    if (!formData.imageUrl) {
-      toast.error("Please upload a product image");
-      return;
-    }
 
-    if (!formData.imageUrl.startsWith("http")) {
-      toast.error("Invalid image URL. Please upload an image properly.");
+    // ✅ Read from ref — never stale
+    if (!imageUrlRef.current || !imageUrlRef.current.startsWith("http")) {
+      toast.error("Please upload a product image");
       return;
     }
 
@@ -232,7 +212,7 @@ export default function ProductsPage() {
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
           description: formData.description || "",
-          images: [{ url: formData.imageUrl, alt: formData.name }]
+          images: [{ url: imageUrlRef.current, alt: formData.name }]
         })
       });
       const json = await res.json();
@@ -242,6 +222,7 @@ export default function ProductsPage() {
       setShowAddModal(false);
       setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" });
       setImagePreview("");
+      imageUrlRef.current = "";
       fetchProducts();
     } catch (err: any) {
       toast.error(err.message);
@@ -260,7 +241,7 @@ export default function ProductsPage() {
     setIsSubmitting(true);
     try {
       const token = getToken();
-      
+
       const body: any = {
         name: formData.name,
         category: formData.category,
@@ -269,9 +250,9 @@ export default function ProductsPage() {
         description: formData.description || ""
       };
 
-      // Only update image if it was changed and is a valid HTTP URL
-      if (formData.imageUrl && formData.imageUrl.startsWith("http")) {
-        body.images = [{ url: formData.imageUrl, alt: formData.name }];
+      // ✅ Only update image if a new one was uploaded via ref
+      if (imageUrlRef.current && imageUrlRef.current.startsWith("http")) {
+        body.images = [{ url: imageUrlRef.current, alt: formData.name }];
       }
 
       const res = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
@@ -287,6 +268,7 @@ export default function ProductsPage() {
       setSelectedProduct(null);
       setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" });
       setImagePreview("");
+      imageUrlRef.current = "";
       fetchProducts();
     } catch (err: any) {
       toast.error(err.message);
@@ -323,15 +305,18 @@ export default function ProductsPage() {
   const openEditModal = (product: Product) => {
     setSelectedProduct(product);
     const catId = getCategoryId(product.category);
+    const existingImage = product.image !== "/placeholder-product.jpg" ? product.image : "";
+    // ✅ Seed ref with existing image so edit without re-upload still sends it
+    imageUrlRef.current = existingImage;
     setFormData({
       name: product.name,
       category: catId,
       price: product.price.toString(),
       stock: product.stock.toString(),
       description: "",
-      imageUrl: product.image !== "/placeholder-product.jpg" ? product.image : ""
+      imageUrl: existingImage
     });
-    setImagePreview(product.image !== "/placeholder-product.jpg" ? product.image : "");
+    setImagePreview(existingImage);
     setShowEditModal(true);
   };
 
@@ -352,7 +337,8 @@ export default function ProductsPage() {
           {uploadingImage ? "Uploading..." : "Choose Image"}
         </label>
         {imagePreview && (
-          <button onClick={() => { setImagePreview(""); setFormData(p => ({ ...p, imageUrl: "" })); }}
+          // ✅ onClick restored
+          <button onClick={() => { setImagePreview(""); setFormData(p => ({ ...p, imageUrl: "" })); imageUrlRef.current = ""; }}
             className="text-red-500 hover:text-red-700 text-sm">Remove</button>
         )}
       </div>
@@ -367,7 +353,7 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-600 mt-1">Manage beauty products ({products.length} total)</p>
         </div>
-        <button onClick={() => { setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" }); setImagePreview(""); setShowAddModal(true); }}
+        <button onClick={() => { setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" }); setImagePreview(""); imageUrlRef.current = ""; setShowAddModal(true); }}
           className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors">
           <Plus size={20} /> Add Product
         </button>

@@ -36,9 +36,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<Pr
     const { id } = await params;
       const body = await request.json();
 
+      const normalizeImage = (img: any) => {
+        if (!img) return null;
+        if (typeof img === 'string') return { url: img, alt: '' };
+        const url = img.url || img.secure_url || img.src;
+        return url ? { url, alt: img.alt || '' } : null;
+      };
+
       const updates: any = { ...body };
-      if (body.image && !body.images) {
-        updates.images = [{ url: body.image, alt: '' }];
+      let imagesArray: Array<{ url: string; alt: string }> = [];
+      if (Array.isArray(body.images)) {
+        imagesArray = body.images.map(normalizeImage).filter(Boolean) as Array<{ url: string; alt: string }>;
+      } else if (typeof body.images === 'string') {
+        imagesArray = [normalizeImage(body.images)] as Array<{ url: string; alt: string }>;
+      }
+
+      if (imagesArray.length > 0) {
+        updates.images = imagesArray;
+      } else if (body.image) {
+        const normalized = normalizeImage(body.image);
+        if (normalized) updates.images = [normalized];
       }
 
       const updated = updateProduct(id, updates);

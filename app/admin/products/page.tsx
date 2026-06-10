@@ -203,17 +203,20 @@ export default function ProductsPage() {
     setIsSubmitting(true);
     try {
       const token = getToken();
+      const payload = {
+        name: formData.name,
+        category: formData.category,
+        price: parseFloat(formData.price),
+        stock: parseInt(formData.stock),
+        description: formData.description || "",
+        images: [{ url: imageUrlRef.current, alt: formData.name }],
+        image: imageUrlRef.current
+      };
+
       const res = await fetch(`${BASE_URL}/products`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          category: formData.category,
-          price: parseFloat(formData.price),
-          stock: parseInt(formData.stock),
-          description: formData.description || "",
-          images: [{ url: imageUrlRef.current, alt: formData.name }]
-        })
+        body: JSON.stringify(payload)
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || json.message || "Failed to add product");
@@ -253,6 +256,7 @@ export default function ProductsPage() {
       // ✅ Only update image if a new one was uploaded via ref
       if (imageUrlRef.current && imageUrlRef.current.startsWith("http")) {
         body.images = [{ url: imageUrlRef.current, alt: formData.name }];
+        body.image = imageUrlRef.current;
       }
 
       const res = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {

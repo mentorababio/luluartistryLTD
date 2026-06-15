@@ -180,7 +180,7 @@ ${order.customerInfo?.phone || ""}
         </h1>
         <p className="text-gray-500 mb-6">
           {status === "transfer"
-            ? "Your order has been placed. Please complete your bank transfer to confirm."
+            ? "Your order has been placed. We'll confirm your payment shortly."
             : "Your payment was successful and your order is confirmed!"}
         </p>
 
@@ -212,7 +212,7 @@ ${order.customerInfo?.phone || ""}
               <span className={`font-semibold capitalize ${
                 status === "success" ? "text-green-600" : "text-orange-500"
               }`}>
-                {status === "transfer" ? "Awaiting Payment" : "Confirmed"}
+                {status === "transfer" ? "Under Review" : "Confirmed"}
               </span>
             </div>
           </div>

@@ -95,13 +95,6 @@ export default function CheckoutPage() {
 }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      toast.error("Please login to access the checkout screen.");
-      router.push("/login");
-      return;
-    }
-
     const savedCart = localStorage.getItem("cart");
     if (savedCart) {
       const parsedCart = JSON.parse(savedCart);
@@ -232,9 +225,9 @@ export default function CheckoutPage() {
     setIsProcessing(true);
 
     try {
-      const nameParts = customerData.fullName.trim().split(" ");
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || "";
+     const nameParts = customerData.fullName.trim().split(/\s+/);
+const firstName = nameParts[0] || "";
+const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : firstName;
 
       const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 

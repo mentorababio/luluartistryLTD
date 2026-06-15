@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       stock: stock || 0,
       tags: tags || [],
       isFeatured: isFeatured || false,
-    });
+    });``
 
     return successResponse(product, 'Product created successfully', 201);
   } catch (error) {

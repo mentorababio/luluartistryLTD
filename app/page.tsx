@@ -1,6 +1,6 @@
 "use client";
-
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Star, Heart, ShoppingCart } from "lucide-react";
 import toast from "react-hot-toast";
@@ -27,35 +27,44 @@ import Instagram2 from "@/assets/images/testimony1.png";
 import Instagram3 from "@/assets/images/testimony3.png";
 import Instagram4 from "@/assets/images/IG4.png";
 
-// ── FIX: Map static product names to their real MongoDB _id values ────────────
-// Replace each value with the actual _id from your MongoDB products collection.
-// Run this in MongoDB Compass or your admin panel:
-//   db.products.find({}, { name: 1 }).pretty()
-const PRODUCT_ID_MAP: Record<string, string> = {
-  "Moon Light Ray":        "REPLACE_WITH_REAL_MONGO_ID",
-  "Stool":                 "REPLACE_WITH_REAL_MONGO_ID",
-  "Lash Bed":              "REPLACE_WITH_REAL_MONGO_ID",
-  "Disposable Bed Cover":  "REPLACE_WITH_REAL_MONGO_ID",
-  "Eye Patches":           "REPLACE_WITH_REAL_MONGO_ID",
-  "Lash Bed Blanket":      "REPLACE_WITH_REAL_MONGO_ID",
-  "Brow Mapping Pen":      "REPLACE_WITH_REAL_MONGO_ID",
-  "Lash Wash Brush":       "REPLACE_WITH_REAL_MONGO_ID",
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
 const page = () => {
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [productIdMap, setProductIdMap] = useState<Record<string, string>>({});
+  const [mapLoading, setMapLoading] = useState(true);
 
+  // ── Load real MongoDB _id values for each product by name ─────────────────
+  useEffect(() => {
+    const loadProductIds = async () => {
+      try {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products?limit=100`);
+        const data = await res.json();
+        
+        const products = data.data || []; // adjust if your API wraps differently
+
+        const map: Record<string, string> = {};
+        products.forEach((p: any) => {
+          map[p.name] = p._id;
+        });
+        setProductIdMap(map);
+      } catch (err) {
+        console.error("Failed to load product IDs:", err);
+      } finally {
+        setMapLoading(false);
+      }
+    };
+    loadProductIds();
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
   const newArrivals = [
-    { id: 1, name: "Moon Light Ray",       price: 20000,  image: moonLight,   rating: 4.9 },
-    { id: 2, name: "Stool",                price: 40000,  image: stool,       rating: 4.9 },
-    { id: 3, name: "Lash Bed",             price: 230000, image: lashbed,     rating: 4.5 },
-    { id: 4, name: "Disposable Bed Cover", price: 24000,  image: Dbed,        rating: 4.8 },
-    { id: 5, name: "Eye Patches",          price: 5000,   image: eyePatches,  rating: 4.3 },
-    { id: 6, name: "Lash Bed Blanket",     price: 25000,  image: lashblanket, rating: 4.7 },
-    { id: 7, name: "Brow Mapping Pen",     price: 4500,   image: browmapping, rating: 4.6 },
-    { id: 8, name: "Lash Wash Brush",      price: 2000,   image: lashwash,    rating: 4.9 },
-  ];
+  { id: 1, name: "Moon Light Tray",      price: 20000,  image: moonLight,   rating: 4.9 }, // was "Moon Light Ray"
+  { id: 2, name: "Stool",                price: 40000,  image: stool,       rating: 4.9 },
+  { id: 3, name: "Lash Bed",             price: 230000, image: lashbed,     rating: 4.5 },
+  { id: 4, name: "Disposable Bed Cover", price: 24000,  image: Dbed,        rating: 4.8 },
+  { id: 5, name: "Eye Patch",            price: 5000,   image: eyePatches,  rating: 4.3 }, // was "Eye Patches"
+  { id: 6, name: "Lash Bed Blanket",     price: 25000,  image: lashblanket, rating: 4.7 },
+  { id: 7, name: "Brow Mapping Pen",     price: 4500,   image: browmapping, rating: 4.6 },
+  { id: 8, name: "Lash Wash Brush",      price: 2000,   image: lashwash,    rating: 4.9 },
+];
 
   const toggleFavorite = (productId: number) => {
     const idStr = productId.toString();
@@ -67,18 +76,33 @@ const page = () => {
       return updated;
     });
   };
+  const router = useRouter();
+
+const goToProduct = (productName: string) => {
+  const mongoId = productIdMap[productName];
+  if (!mongoId) {
+    toast.error("This product isn't linked to our store yet.");
+    return;
+  }
+  router.push(`/product/${mongoId}`);
+};
 
   const addToCart = (productId: number) => {
     const product = newArrivals.find(p => p.id === productId);
     if (!product) return;
 
-    // ── FIX: Use real MongoDB _id so checkout can find the product ────────────
-    const mongoId = PRODUCT_ID_MAP[product.name];
-    if (!mongoId || mongoId === "REPLACE_WITH_REAL_MONGO_ID") {
+    if (mapLoading) {
+      toast.error("Still loading products, try again in a second.");
+      return;
+    }
+
+    // ── Use real MongoDB _id so checkout can find the product ─────────────
+    const mongoId = productIdMap[product.name];
+    if (!mongoId) {
       toast.error("This product isn't linked to our store yet. Please find it in the Shop.");
       return;
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────
 
     const savedCart = localStorage.getItem("cart");
     const cartItems = savedCart ? JSON.parse(savedCart) : [];
@@ -121,36 +145,46 @@ const page = () => {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-          {newArrivals.map((product) => (
-            <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
-              <div className="relative aspect-square" style={{ backgroundColor: '#F0D5BD' }}>
-                <Image src={product.image} alt={product.name} fill className="object-cover" />
-                <button
-                  onClick={() => toggleFavorite(product.id)}
-                  className={`absolute top-2 right-2 rounded-full p-2 transition-colors ${
-                    favorites.includes(product.id.toString()) ? 'bg-yellow-500 text-white' : 'bg-white/80 text-gray-600 hover:bg-white'
-                  }`}
-                >
-                  <Heart size={16} className={favorites.includes(product.id.toString()) ? 'fill-current' : ''} />
-                </button>
-              </div>
-              <div className="p-4">
-                <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
-                <p className="font-bold mb-1 text-lg">{formatPrice(product.price)}</p>
-                <div className="flex items-center gap-1 mb-3">
-                  <div className="flex items-center">{renderStars(product.rating)}</div>
-                  <span className="text-xs text-gray-600 ml-1">{product.rating}</span>
-                </div>
-                <button
-                  onClick={() => addToCart(product.id)}
-                  className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm bg-yellow-600 hover:bg-yellow-700 text-white"
-                >
-                  <ShoppingCart size={14} />
-                  Add to cart
-                </button>
-              </div>
-            </div>
-          ))}
+         {newArrivals.map((product) => (
+  <div
+    key={product.id}
+    onClick={() => goToProduct(product.name)}
+    className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden cursor-pointer"
+  >
+    <div className="relative aspect-square" style={{ backgroundColor: '#F0D5BD' }}>
+      <Image src={product.image} alt={product.name} fill className="object-cover" />
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFavorite(product.id);
+        }}
+        className={`absolute top-2 right-2 rounded-full p-2 transition-colors ${
+          favorites.includes(product.id.toString()) ? 'bg-yellow-500 text-white' : 'bg-white/80 text-gray-600 hover:bg-white'
+        }`}
+      >
+        <Heart size={16} className={favorites.includes(product.id.toString()) ? 'fill-current' : ''} />
+      </button>
+    </div>
+    <div className="p-4">
+      <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
+      <p className="font-bold mb-1 text-lg">{formatPrice(product.price)}</p>
+      <div className="flex items-center gap-1 mb-3">
+        <div className="flex items-center">{renderStars(product.rating)}</div>
+        <span className="text-xs text-gray-600 ml-1">{product.rating}</span>
+      </div>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          addToCart(product.id);
+        }}
+        className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm bg-yellow-600 hover:bg-yellow-700 text-white"
+      >
+        <ShoppingCart size={14} />
+        Add to cart
+      </button>
+    </div>
+  </div>
+))}
         </div>
       </div>
 

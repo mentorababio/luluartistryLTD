@@ -2,9 +2,11 @@
 
 import { Suspense, useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Heart, Star, ShoppingCart } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
+import type { StaticImageData } from "next/image";
 
 // ── Local image imports ───────────────────────────────────────────────────────
 import browmapping from "@/assets/images/brow mapping pen.png";
@@ -63,68 +65,36 @@ import tag45 from "@/assets/images/tag45.png";
 import numb from "@/assets/images/numb.png";
 import mastpro from "@/assets/images/mastpro.png";
 import mappingstring from "@/assets/images/mapping string.png";
-import type { StaticImageData } from "next/image";
 
-// ── Map product name → local image ────────────────────────────────────────────
 const PRODUCT_IMAGE_MAP: Record<string, StaticImageData> = {
-  "Moon Light Tray":                  moonLight,
-  "Stool":                            stool,
-  "Lash Bed":                         lashbed,
-  "Disposable Bed Cover":             Dbed,
-  "Glove":                            Glove,
-  "One Battery Tattoo Machine":       OneBtm,
-  "Two Battery Tattoo Machine":       twoBtm,
-  "Moon Light 26 Inches":             moonLightInches,
-  "Eye Patch":                        eyePatches,
-  "Lash Bed Blanket":                 lashblanket,
-  "Brow Mapping Pen":                 browmapping,
-  "Lash Wash Brush":                  lashwash,
-  "IB Primer":                        Ibprimer,
-  "Brow Sealant":                     browsealant,
-  "Dummy Head":                       Dummyhead,
-  "Double Arm Light":                 DoubleArm,
-  "Easy Lash Fan Tray":               EasyLash,
-  "Classic Lash Fan":                 ClassicLash,
-  "Lash Glue 10ml":                   LashGlueTen,
-  "Lash Glue 5ml":                    LashGlueFive,
-  "Lash Breathable Tape":             LashBreathTape,
-  "Lash Transparent Tape":            LashTransTape,
-  "Volume Tweezer":                   volumetweazer,
-  "Fiber Tip Tweezer":                fibertweazer,
-  "Lash Fan":                         lashfan,
-  "Glue Ring":                        gluering,
-  "Curved Isolation Tweezer":         CurvedIsolation,
-  "Lash Sealant":                     lashsealant,
-  "Glue Storage":                     gluestorage,
-  "Mast P60 Machine":                 MastP60,
-  "One Battery Tattoo Machine Cover": oneBtmCover,
-  "F&E Primary Cream":                FandE,
-  "Golden Rose Anesthe":              GoldenRose,
-  "Tag 45 Secondary Numb":            tag45,
-  "Primary Numb Cream":               numb,
-  "Mast Pro Cartridge 20pcs":         mastpro,
-  "Mapping Strings":                  mappingstring,
-  "Luxury Spa Body Oil":              Luxuryspa,
-  "Herbal Bath Salt":                 Herbalsalt,
-  "Aromatherapy Candle":              Aromatherapy,
-  "Green Tea Facial Mask":            greentea,
-  "Exfoliating Body Scrub":           ExScrup,
-  "Rose Quartz Facial Roll":          Rqfr,
-  "Clay Detox Mask":                  claydetox,
-  "Cooling Eye Gel Pad":              coolingeye,
-  "Eucalyptus Shower Steamer":        Eucalyptus,
-  "Coconut Milk Bath Soak":           coconutmilk,
-  "Luxury Foot Scrub":                footscrub,
-  "Silk Sleep Mask":                  silksleep,
-  "Detox Herbal Tea Blend":           Detox,
-  "Body Massage Balm":                messagebalm,
-  "Hydrating Sheet Mask":             hydratingsheet,
-  "Luxury Spa Towel Set":             spaTowelSet,
-  "Rose Infused Toner Mist":          rose,
-  "Spa Incense Sticks":               spaIncense,
-  "Luxury Spa Gift Set":              luxuryspaGift,
+  "Moon Light Tray": moonLight, "Stool": stool, "Lash Bed": lashbed,
+  "Disposable Bed Cover": Dbed, "Glove": Glove,
+  "One Battery Tattoo Machine": OneBtm, "Two Battery Tattoo Machine": twoBtm,
+  "Moon Light 26 Inches": moonLightInches, "Eye Patch": eyePatches,
+  "Lash Bed Blanket": lashblanket, "Brow Mapping Pen": browmapping,
+  "Lash Wash Brush": lashwash, "IB Primer": Ibprimer, "Brow Sealant": browsealant,
+  "Dummy Head": Dummyhead, "Double Arm Light": DoubleArm,
+  "Easy Lash Fan Tray": EasyLash, "Classic Lash Fan": ClassicLash,
+  "Lash Glue 10ml": LashGlueTen, "Lash Glue 5ml": LashGlueFive,
+  "Lash Breathable Tape": LashBreathTape, "Lash Transparent Tape": LashTransTape,
+  "Volume Tweezer": volumetweazer, "Fiber Tip Tweezer": fibertweazer,
+  "Lash Fan": lashfan, "Glue Ring": gluering,
+  "Curved Isolation Tweezer": CurvedIsolation, "Lash Sealant": lashsealant,
+  "Glue Storage": gluestorage, "Mast P60 Machine": MastP60,
+  "One Battery Tattoo Machine Cover": oneBtmCover, "F&E Primary Cream": FandE,
+  "Golden Rose Anesthe": GoldenRose, "Tag 45 Secondary Numb": tag45,
+  "Primary Numb Cream": numb, "Mast Pro Cartridge 20pcs": mastpro,
+  "Mapping Strings": mappingstring, "Luxury Spa Body Oil": Luxuryspa,
+  "Herbal Bath Salt": Herbalsalt, "Aromatherapy Candle": Aromatherapy,
+  "Green Tea Facial Mask": greentea, "Exfoliating Body Scrub": ExScrup,
+  "Rose Quartz Facial Roll": Rqfr, "Clay Detox Mask": claydetox,
+  "Cooling Eye Gel Pad": coolingeye, "Eucalyptus Shower Steamer": Eucalyptus,
+  "Coconut Milk Bath Soak": coconutmilk, "Luxury Foot Scrub": footscrub,
+  "Silk Sleep Mask": silksleep, "Detox Herbal Tea Blend": Detox,
+  "Body Massage Balm": messagebalm, "Hydrating Sheet Mask": hydratingsheet,
+  "Luxury Spa Towel Set": spaTowelSet, "Rose Infused Toner Mist": rose,
+  "Spa Incense Sticks": spaIncense, "Luxury Spa Gift Set": luxuryspaGift,
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
 const BASE_URL = "https://luluartistry-backend.onrender.com/api";
 
@@ -164,15 +134,12 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
           price: p.price,
           stock: p.stock ?? 0,
           inStock: p.inStock ?? ((p.stock ?? 0) > 0),
-          // ── FIX: use local image if API has no image ──────────────────────
           image: (p.images && p.images[0] && p.images[0].url)
             || PRODUCT_IMAGE_MAP[p.name]
             || null,
-          // ─────────────────────────────────────────────────────────────────
           rating: p.averageRating || 4,
         }));
 
-        // Filter out products with no image at all
         setProducts(transformed.filter((p: any) => p.image));
       } catch (err) {
         console.error("Failed to fetch products:", err);
@@ -221,7 +188,9 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
     "Shop All Products"
   );
 
-  const toggleFavorite = (productId: string) => {
+  const toggleFavorite = (e: React.MouseEvent, productId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
     setFavorites((prev) => {
       const updated = prev.includes(productId)
         ? prev.filter((id) => id !== productId)
@@ -231,7 +200,9 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
     });
   };
 
-  const addToCart = (product: any) => {
+  const addToCart = (e: React.MouseEvent, product: any) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!product.inStock) return;
     const savedCart = localStorage.getItem("cart");
     const cartItems = savedCart ? JSON.parse(savedCart) : [];
@@ -247,11 +218,8 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
 
   const renderStars = (rating: number) =>
     Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        size={14}
-        className={i < Math.floor(rating) ? "text-yellow-400 fill-current" : "text-gray-300"}
-      />
+      <Star key={i} size={14}
+        className={i < Math.floor(rating) ? "text-yellow-400 fill-current" : "text-gray-300"} />
     ));
 
   const formatPrice = (price: number) => `₦${price.toLocaleString("en-NG")}`;
@@ -280,10 +248,12 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
-            <div
+            <Link
               key={product.id}
-              className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden"
+              href={`/product/${product.id}`}
+              className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden block"
             >
+              {/* Image */}
               <div className="relative aspect-square" style={{ backgroundColor: "#F0D5BD" }}>
                 <Image
                   src={product.image}
@@ -291,9 +261,10 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
                   fill
                   className="object-cover"
                 />
+                {/* Heart button */}
                 <button
-                  onClick={() => toggleFavorite(product.id)}
-                  className={`absolute top-2 right-2 rounded-full p-2 transition-colors ${
+                  onClick={(e) => toggleFavorite(e, product.id)}
+                  className={`absolute top-2 right-2 rounded-full p-2 transition-colors z-10 ${
                     favorites.includes(product.id)
                       ? "bg-yellow-500 text-white"
                       : "bg-white/80 text-gray-600 hover:bg-white"
@@ -303,6 +274,7 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
                 </button>
               </div>
 
+              {/* Info */}
               <div className="p-4">
                 <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
                 <p className="font-bold mb-1 text-lg">{formatPrice(product.price)}</p>
@@ -311,7 +283,7 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
                   <span className="text-xs text-gray-600 ml-1">{product.rating}</span>
                 </div>
                 <button
-                  onClick={() => addToCart(product)}
+                  onClick={(e) => addToCart(e, product)}
                   disabled={!product.inStock}
                   className={`w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-semibold transition-colors text-sm ${
                     product.inStock
@@ -323,7 +295,7 @@ const ProductGridContent = ({ category, title }: ProductGridProps) => {
                   {product.inStock ? "Add to cart" : "Out of Stock"}
                 </button>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 

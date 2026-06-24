@@ -127,10 +127,11 @@ const Footer = () => {
 							<MapPin size={16} /> 123 Beauty Street, Calabar, Nigeria
 						</p>
 						<p className='flex items-center gap-2'>
-							<Mail size={16} /> info@lulusartistry.ng
+							<Mail size={16} /> lulusartistry321@gmail.com
+
 						</p>
 						<p className='flex items-center gap-2'>
-							<Phone size={16} /> +234 703 100 2094
+							<Phone size={16} /> 07031002094
 						</p>
 						<p className='flex items-center gap-2'>
 							<Clock size={16} /> Mon - Fri: 9AM - 6PM

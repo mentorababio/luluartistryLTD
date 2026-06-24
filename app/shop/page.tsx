@@ -1,5 +1,4 @@
-﻿"use client";
-
+﻿
 import Image from "next/image";
 import ProductGrid from "@/components/shop/ProductGrid";
 import MapSection from "@/components/common/MapSection";

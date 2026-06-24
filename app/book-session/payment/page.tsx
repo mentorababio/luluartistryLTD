@@ -338,7 +338,7 @@ const PaymentPageContent = () => {
 								<div>
 									<h3 className="font-semibold text-lg text-dark-gray mb-2">Contact Us</h3>
 									<p className="text-gray-600 text-sm">
-										Need to reschedule? Contact us at +234 XXX XXX XXXX or email info@lulusartistry.com
+										Need to reschedule? Contact us at 09018022296 or email  lulusartistry321@gmail.com
 									</p>
 								</div>
 							</div>

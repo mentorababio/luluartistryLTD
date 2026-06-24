@@ -1,40 +1,29 @@
 import ProductDetail from "@/components/shop/ProductDetail";
 import { notFound } from "next/navigation";
 
+const BASE_URL = "https://luluartistry-backend.onrender.com/api";
+
 interface ProductPageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }>;
 }
 
 async function getProduct(id: string) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
-   const response = await fetch(`${baseUrl}/api/products/${id}`, {
-  next: { revalidate: 3600 }, // Revalidate every hour
-});
-
-    
-    if (!response.ok) {
-      return null;
-    }
-    
+    const response = await fetch(`${BASE_URL}/products/${id}`, {
+      next: { revalidate: 3600 },
+    });
+    if (!response.ok) return null;
     const data = await response.json();
     return data.data;
   } catch (error) {
-    console.error('Error fetching product:', error);
+    console.error("Error fetching product:", error);
     return null;
   }
 }
 
-async function ProductPage({ params }: ProductPageProps) {
-  const product = await getProduct(params.id);
-  
-  if (!product) {
-    notFound();
-  }
-
+export default async function ProductPage({ params }: ProductPageProps) {
+  const { id } = await params;
+  const product = await getProduct(id);
+  if (!product) notFound();
   return <ProductDetail product={product} />;
 }
-
-export default ProductPage;

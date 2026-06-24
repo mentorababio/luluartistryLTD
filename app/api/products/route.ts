@@ -50,11 +50,24 @@ export async function POST(request: NextRequest) {
       return errorResponse('Missing required fields', 400);
     }
 
-    const imagesArray = Array.isArray(images)
-      ? images
-      : image
-      ? [{ url: image, alt: '' }]
-      : [];
+    const normalizeImage = (img: any) => {
+      if (!img) return null;
+      if (typeof img === 'string') return { url: img, alt: '' };
+      const url = img.url || img.secure_url || img.src;
+      return url ? { url, alt: img.alt || '' } : null;
+    };
+
+    let imagesArray: Array<{ url: string; alt: string }> = [];
+    if (Array.isArray(images)) {
+      imagesArray = images.map(normalizeImage).filter(Boolean) as Array<{ url: string; alt: string }>;
+    } else if (typeof images === 'string') {
+      imagesArray = [normalizeImage(images)] as Array<{ url: string; alt: string }>;
+    }
+
+    if (imagesArray.length === 0 && image) {
+      const normalized = normalizeImage(image);
+      if (normalized) imagesArray = [normalized];
+    }
 
     const product = createProduct({
       name,

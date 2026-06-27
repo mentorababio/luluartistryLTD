@@ -15,24 +15,32 @@ export default function AdminLayout({
 	const pathname = usePathname();
 	const [isLoading, setIsLoading] = useState(true);
 
+	const isAdminRoute = pathname.startsWith("/admin");
+
 	useEffect(() => {
+		// Only protect admin routes
+		if (!isAdminRoute) {
+			setIsLoading(false);
+			return;
+		}
+
 		// Allow access to login page without auth
 		if (pathname === "/admin/login") {
 			setIsLoading(false);
 			return;
 		}
 
-		// Check authentication for all other admin routes
+		// Check authentication only for admin routes
 		if (!adminAuth.isAuthenticated()) {
 			router.push("/admin/login");
 			return;
 		}
 
 		setIsLoading(false);
-	}, [pathname, router]);
+	}, [pathname, router, isAdminRoute]);
 
-	// Show loading state
-	if (isLoading) {
+	// Show loading state only on admin routes
+	if (isLoading && isAdminRoute) {
 		return (
 			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
 				<div className="text-center">
@@ -41,6 +49,11 @@ export default function AdminLayout({
 				</div>
 			</div>
 		);
+	}
+
+	// Non-admin pages render directly
+	if (!isAdminRoute) {
+		return <>{children}</>;
 	}
 
 	// Don't show sidebar/header on login page
@@ -60,4 +73,3 @@ export default function AdminLayout({
 		</div>
 	);
 }
-

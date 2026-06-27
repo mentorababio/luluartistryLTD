@@ -67,7 +67,7 @@ const Header = ({ onToggleMenu, isMenuOpen }: HeaderProps) => {
 		const interval = setInterval(() => {
 			updateCartCount();
 			updateWishlistCount();
-		}, 500);
+		}, 5000);
 
 		return () => {
 			window.removeEventListener("storage", handleStorageChange);

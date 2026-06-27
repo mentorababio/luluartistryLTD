@@ -94,14 +94,14 @@ export default function BookingsPage() {
   const getToken = () => localStorage.getItem("token");
 
   const fetchBookings = async () => {
-    try {
-      setLoading(true);
-      const token = getToken();
-      const params = new URLSearchParams({ limit: "100" });
-      if (statusFilter !== "all") params.append("status", statusFilter);
-      if (locationFilter !== "all") params.append("location", locationFilter);
+  try {
+    setLoading(true);
+    const token = getToken();
+    // Always fetch ALL bookings — filter client-side so tab counts stay accurate
+    const params = new URLSearchParams({ limit: "200" });
+    if (locationFilter !== "all") params.append("location", locationFilter);
 
-      const res = await fetch(`${BASE_URL}/bookings/admin/all?${params}`, {
+    const res = await fetch(`${BASE_URL}/bookings/admin/all?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const json = await res.json();
@@ -113,7 +113,7 @@ export default function BookingsPage() {
     }
   };
 
-  useEffect(() => { fetchBookings(); }, [statusFilter, locationFilter]);
+  useEffect(() => { fetchBookings(); }, [locationFilter]);
 
   const handleStatusUpdate = async (bookingId: string, status: string, note?: string) => {
     setActionLoading(bookingId + "-" + status);
@@ -167,7 +167,8 @@ export default function BookingsPage() {
       name.includes(search.toLowerCase()) ||
       b.bookingNumber?.toLowerCase().includes(search.toLowerCase()) ||
       b.customerInfo.email?.toLowerCase().includes(search.toLowerCase());
-    return matchesSearch;
+    const matchesStatus = statusFilter === "all" || b.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
   const tabs = [

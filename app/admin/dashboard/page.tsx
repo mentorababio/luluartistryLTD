@@ -56,7 +56,7 @@ export default function AdminDashboard() {
 				}
 
 				const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
-				const response = await fetch(`${baseUrl}/bookings`, {
+				const response = await fetch(`${baseUrl}/bookings/admin/all?limit=50`, {
 					headers: {
 						'Authorization': `Bearer ${token}`,
 						'Content-Type': 'application/json'
@@ -84,16 +84,20 @@ export default function AdminDashboard() {
 
 				// Transform API response to Appointment format
 				const transformedAppointments = bookings.map((booking: any) => ({
-					id: booking._id,
-					clientName: booking.clientName,
-					service: booking.service || 'Booking',
-					artist: booking.artist || 'TBA',
-					date: new Date(booking.date).toLocaleDateString('en-GB'),
-					time: new Date(booking.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-					price: `₦${(booking.price || 0).toLocaleString()}`,
-					status: booking.status === 'confirmed' ? 'Confirmed' : 
-							booking.status === 'pending' ? 'Pending' : 'Completed'
-				}));
+    id: booking._id,
+    clientName: booking.customerInfo
+        ? `${booking.customerInfo.firstName || ''} ${booking.customerInfo.lastName || ''}`.trim()
+        : booking.clientName || 'Guest',
+    service: booking.serviceSnapshot?.name || booking.service || 'Booking',
+    artist: booking.artist?.name || booking.artist?.type || booking.artist || 'TBA',
+    date: booking.appointmentDate
+        ? new Date(booking.appointmentDate).toLocaleDateString('en-GB')
+        : booking.date ? new Date(booking.date).toLocaleDateString('en-GB') : 'N/A',
+    time: booking.timeSlot?.start || booking.time || 'N/A',
+    price: `₦${(booking.pricing?.servicePrice || booking.price || 0).toLocaleString()}`,
+    status: booking.status === 'confirmed' ? 'Confirmed' :
+            booking.status === 'pending' ? 'Pending' : 'Completed'
+}));
 
 				setAppointmentsData(transformedAppointments);
 				setError(null);

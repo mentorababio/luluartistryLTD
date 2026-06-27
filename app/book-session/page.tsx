@@ -28,7 +28,7 @@ import grouplashtraining from "@/assets/images/booking/GroupLashTraining.png";
 import combotraining from "@/assets/images/booking/Private Combo.png";
 import groupcombotraining from "@/assets/images/booking/GroupCombo.png";
 import lamination from "@/assets/images/booking/PrivateBrowLamination.png";
-
+import toast from "react-hot-toast";
 
 
 
@@ -44,6 +44,25 @@ const BookSessionPage = () => {
 		time: "",
 		notes: ""
 	});
+	const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+
+    fetch("https://luluartistry-backend.onrender.com/api/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+        .then((res) => res.json())
+        .then((data) => {
+            if (data?.data) {
+                const user = data.data;
+                setFormData((prev) => ({
+                    ...prev,
+                    name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+                    email: user.email || "",
+                    phone: user.phone || "",
+                }));
+            }
+        })
+        .catch(() => {});
 
 	const services = [
 		{
@@ -316,12 +335,12 @@ const BookSessionPage = () => {
 										<span className="text-2xl font-bold text-yellow-500">
 											{formatPrice(service.price)}
 									</span>
-									<Link
-											href={`/book-session/appointment?service=${service.id}`}
-											className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 px-6 rounded-lg transition-colors"
-									>
-											Book Now
-									</Link>
+								<Link
+    href={`/book-session/appointment?service=${encodeURIComponent(service.id)}${formData.date ? `&date=${formData.date}` : ''}${formData.time ? `&time=${encodeURIComponent(formData.time)}` : ''}`}
+    className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 px-6 rounded-lg transition-colors"
+>
+    Book Now
+</Link>
 								</div>
 							</div>
 						</div>
@@ -387,13 +406,18 @@ const BookSessionPage = () => {
 							<h3 className="text-2xl font-bold text-gray-800 mb-6">Appointment Details</h3>
 							<form 
 								onSubmit={(e) => {
-									e.preventDefault();
-									if (formData.service) {
-										router.push(`/book-session/appointment?service=${encodeURIComponent(formData.service)}`);
-									} else {
-										// Scroll to top if no service selected
-										window.scrollTo({ top: 0, behavior: 'smooth' });
-									}
+    e.preventDefault();
+    if (formData.service) {
+        const params = new URLSearchParams({
+            service: formData.service,
+            ...(formData.date ? { date: formData.date } : {}),
+            ...(formData.time ? { time: formData.time } : {}),
+        });
+        router.push(`/book-session/appointment?${params.toString()}`);
+    } else {
+        toast.error("Please select a service first");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 								}}
 								className="space-y-6"
 							>

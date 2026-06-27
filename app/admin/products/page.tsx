@@ -2,14 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { Plus, Edit, Trash2, Star, ChevronDown, X, Upload, CheckCircle, Loader } from "lucide-react";
+import { Plus, Edit, Trash2, Star, ChevronDown, X, Upload, Loader, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 
 const BASE_URL = "https://luluartistry-backend.onrender.com/api";
-
-// ─── Variant types ──────────────────────────────────────────────────────────
-// Flat shape the backend stores and ProductDetail.tsx already reads:
-// { type, value, stock, priceAdjustment }
 
 interface Variant {
   _id?: string;
@@ -45,20 +41,9 @@ const groupVariants = (variants: Variant[]): VariantGroup[] => {
   const map = new Map<string, VariantGroup>();
   variants.forEach((v) => {
     if (!map.has(v.type)) {
-      map.set(v.type, {
-        uid: makeUid(),
-        type: v.type,
-        isCustomType: !PRESET_VARIANT_TYPES.includes(v.type),
-        values: [],
-      });
+      map.set(v.type, { uid: makeUid(), type: v.type, isCustomType: !PRESET_VARIANT_TYPES.includes(v.type), values: [] });
     }
-    map.get(v.type)!.values.push({
-      uid: makeUid(),
-      _id: v._id,
-      value: v.value,
-      stock: v.stock,
-      priceAdjustment: v.priceAdjustment,
-    });
+    map.get(v.type)!.values.push({ uid: makeUid(), _id: v._id, value: v.value, stock: v.stock, priceAdjustment: v.priceAdjustment });
   });
   return Array.from(map.values());
 };
@@ -78,23 +63,17 @@ const validateVariantGroups = (groups: VariantGroup[]): string | null => {
   const seenTypes = new Set<string>();
   for (const g of groups) {
     const trimmedType = g.type.trim();
-    if (!trimmedType) return "Every variant needs a type name (e.g. Curl, Length, Color).";
-    if (seenTypes.has(trimmedType.toLowerCase())) {
-      return `"${trimmedType}" is used more than once. Combine its values into one group.`;
-    }
+    if (!trimmedType) return "Every variant needs a type name.";
+    if (seenTypes.has(trimmedType.toLowerCase())) return `"${trimmedType}" is used more than once.`;
     seenTypes.add(trimmedType.toLowerCase());
     if (g.values.length === 0) return `Add at least one value under "${trimmedType}".`;
-
     const seenValues = new Set<string>();
     for (const v of g.values) {
       const trimmedValue = v.value.trim();
       if (!trimmedValue) return `Every value under "${trimmedType}" needs a name.`;
-      if (seenValues.has(trimmedValue.toLowerCase())) {
-        return `"${trimmedValue}" is repeated under "${trimmedType}".`;
-      }
+      if (seenValues.has(trimmedValue.toLowerCase())) return `"${trimmedValue}" is repeated under "${trimmedType}".`;
       seenValues.add(trimmedValue.toLowerCase());
       if (v.stock < 0) return `Stock for "${trimmedValue}" can't be negative.`;
-      if (v.priceAdjustment < 0) return `Price adjustment for "${trimmedValue}" can't be negative.`;
     }
   }
   return null;
@@ -109,6 +88,7 @@ interface Product {
   image: string;
   rating: number;
   variants: Variant[];
+  isNewArrival: boolean;
 }
 
 interface Category {
@@ -117,14 +97,7 @@ interface Category {
   slug: string;
 }
 
-// ─── Stable, top-level field components ────────────────────────────────────
-// IMPORTANT: these must be defined OUTSIDE ProductsPage. Defining a component
-// inside another component's body gives it a new identity on every render,
-// which forces React to unmount + remount it (and anything with autoFocus
-// inside it grabs focus back) every single time you type a character
-// anywhere in the parent. Keeping them here as plain top-level functions
-// keeps their identity stable across renders, so typing in any field no
-// longer disturbs them.
+// ── Stable top-level components ───────────────────────────────────────────────
 
 interface ImageFieldProps {
   imagePreview: string;
@@ -162,51 +135,23 @@ function ImageField({ imagePreview, uploadingImage, onUpload, onRemove }: ImageF
 interface VariantsSectionProps {
   groups: VariantGroup[];
   onAddGroup: () => void;
-  onRemoveGroup: (groupUid: string) => void;
-  onUpdateGroupType: (groupUid: string, type: string) => void;
-  onToggleCustomType: (groupUid: string, isCustom: boolean) => void;
-  onAddValue: (groupUid: string) => void;
+  onRemoveGroup: (uid: string) => void;
+  onUpdateGroupType: (uid: string, type: string) => void;
+  onToggleCustomType: (uid: string, isCustom: boolean) => void;
+  onAddValue: (uid: string) => void;
   onRemoveValue: (groupUid: string, valueUid: string) => void;
-  onUpdateValue: (
-    groupUid: string,
-    valueUid: string,
-    field: "value" | "stock" | "priceAdjustment",
-    newValue: string
-  ) => void;
+  onUpdateValue: (groupUid: string, valueUid: string, field: "value" | "stock" | "priceAdjustment", newValue: string) => void;
 }
 
-function VariantsSection({
-  groups,
-  onAddGroup,
-  onRemoveGroup,
-  onUpdateGroupType,
-  onToggleCustomType,
-  onAddValue,
-  onRemoveValue,
-  onUpdateValue,
-}: VariantsSectionProps) {
-  const totalCombinations = groups.reduce(
-    (acc, g) => (g.values.length > 0 ? acc * g.values.length : acc),
-    1
-  );
-
+function VariantsSection({ groups, onAddGroup, onRemoveGroup, onUpdateGroupType, onToggleCustomType, onAddValue, onRemoveValue, onUpdateValue }: VariantsSectionProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
         <label className="block text-sm font-semibold text-gray-700">Variants (optional)</label>
-        {groups.length > 0 && (
-          <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-0.5 rounded-full">
-            {groups.length}
-          </span>
-        )}
       </div>
-
       {groups.length === 0 ? (
-        <button
-          type="button"
-          onClick={onAddGroup}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 hover:border-yellow-500 text-gray-500 hover:text-yellow-600 rounded-lg text-sm font-medium transition-colors"
-        >
+        <button type="button" onClick={onAddGroup}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 hover:border-yellow-500 text-gray-500 hover:text-yellow-600 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Add Variant Type
         </button>
       ) : (
@@ -215,198 +160,133 @@ function VariantsSection({
             <div key={group.uid} className="border border-gray-200 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
                 {group.isCustomType ? (
-                  <input
-                    type="text"
-                    value={group.type}
-                    onChange={(e) => onUpdateGroupType(group.uid, e.target.value)}
-                    placeholder="Custom type, e.g. Scent"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none"
-                  />
+                  <input type="text" value={group.type} onChange={(e) => onUpdateGroupType(group.uid, e.target.value)}
+                    placeholder="Custom type" className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-yellow-500 outline-none" />
                 ) : (
-                  <select
-                    value={group.type}
-                    onChange={(e) => {
-                      if (e.target.value === "__custom__") {
-                        onToggleCustomType(group.uid, true);
-                      } else {
-                        onUpdateGroupType(group.uid, e.target.value);
-                      }
-                    }}
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none bg-white"
-                  >
+                  <select value={group.type} onChange={(e) => { if (e.target.value === "__custom__") { onToggleCustomType(group.uid, true); } else { onUpdateGroupType(group.uid, e.target.value); } }}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-yellow-500 outline-none bg-white">
                     <option value="">Choose type</option>
-                    {PRESET_VARIANT_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
+                    {PRESET_VARIANT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                     <option value="__custom__">Custom...</option>
                   </select>
                 )}
                 {group.isCustomType && (
-                  <button
-                    type="button"
-                    onClick={() => onToggleCustomType(group.uid, false)}
-                    className="text-xs text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
-                  >
-                    Use preset
-                  </button>
+                  <button type="button" onClick={() => onToggleCustomType(group.uid, false)} className="text-xs text-gray-400 hover:text-gray-600 underline whitespace-nowrap">Use preset</button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => onRemoveGroup(group.uid)}
-                  className="text-gray-400 hover:text-red-500 p-1"
-                  aria-label="Remove variant type"
-                >
+                <button type="button" onClick={() => onRemoveGroup(group.uid)} className="text-gray-400 hover:text-red-500 p-1">
                   <Trash2 size={14} />
                 </button>
               </div>
-
-              {group.values.length > 0 && (
-                <div className="grid grid-cols-[1fr_60px_70px_24px] gap-1.5 px-1 mb-1">
-                  <span className="text-[11px] font-medium text-gray-400">Value</span>
-                  <span className="text-[11px] font-medium text-gray-400">Stock</span>
-                  <span className="text-[11px] font-medium text-gray-400">+₦</span>
-                  <span></span>
-                </div>
-              )}
-
               <div className="space-y-1.5">
                 {group.values.map((v) => (
                   <div key={v.uid} className="grid grid-cols-[1fr_60px_70px_24px] gap-1.5 items-center">
-                    <input
-                      type="text"
-                      value={v.value}
-                      onChange={(e) => onUpdateValue(group.uid, v.uid, "value", e.target.value)}
-                      placeholder="e.g. Classic"
-                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      value={v.stock}
-                      onChange={(e) => onUpdateValue(group.uid, v.uid, "stock", e.target.value)}
-                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      value={v.priceAdjustment}
-                      onChange={(e) => onUpdateValue(group.uid, v.uid, "priceAdjustment", e.target.value)}
-                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-transparent outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onRemoveValue(group.uid, v.uid)}
-                      className="text-gray-400 hover:text-red-500 p-1"
-                      aria-label="Remove value"
-                    >
+                    <input type="text" value={v.value} onChange={(e) => onUpdateValue(group.uid, v.uid, "value", e.target.value)}
+                      placeholder="e.g. Classic" className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none" />
+                    <input type="number" min={0} value={v.stock} onChange={(e) => onUpdateValue(group.uid, v.uid, "stock", e.target.value)}
+                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none" />
+                    <input type="number" min={0} value={v.priceAdjustment} onChange={(e) => onUpdateValue(group.uid, v.uid, "priceAdjustment", e.target.value)}
+                      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-yellow-500 outline-none" />
+                    <button type="button" onClick={() => onRemoveValue(group.uid, v.uid)} className="text-gray-400 hover:text-red-500 p-1">
                       <X size={14} />
                     </button>
                   </div>
                 ))}
               </div>
-
-              <button
-                type="button"
-                onClick={() => onAddValue(group.uid)}
-                className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-yellow-600 hover:text-yellow-700"
-              >
+              <button type="button" onClick={() => onAddValue(group.uid)} className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-yellow-600 hover:text-yellow-700">
                 <Plus size={12} /> Add value
               </button>
             </div>
           ))}
-
-          <button
-            type="button"
-            onClick={onAddGroup}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-300 hover:border-yellow-500 text-gray-500 hover:text-yellow-600 rounded-lg text-sm font-medium transition-colors"
-          >
+          <button type="button" onClick={onAddGroup}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-300 hover:border-yellow-500 text-gray-500 hover:text-yellow-600 rounded-lg text-sm font-medium transition-colors">
             <Plus size={14} /> Add Another Type
           </button>
-
-          {totalCombinations > 1 && (
-            <p className="text-xs text-gray-400 text-center">
-              {totalCombinations} combinations across {groups.length} option{groups.length !== 1 ? "s" : ""}
-            </p>
-          )}
         </div>
       )}
     </div>
   );
 }
 
+// ── New Arrival Toggle component ──────────────────────────────────────────────
+function NewArrivalToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${checked ? "border-yellow-500 bg-yellow-50" : "border-gray-200 bg-gray-50"}`}>
+      <div className="flex items-center gap-3">
+        <Sparkles size={18} className={checked ? "text-yellow-500" : "text-gray-400"} />
+        <div>
+          <p className="text-sm font-semibold text-gray-800">Mark as New Arrival</p>
+          <p className="text-xs text-gray-500">Product will appear on the New Arrivals page</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? "bg-yellow-500" : "bg-gray-300"}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
+      </button>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+  const [products, setProducts]               = useState<Product[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [categoriesList, setCategoriesList]   = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [showNewArrivalsOnly, setShowNewArrivalsOnly] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddModal, setShowAddModal]       = useState(false);
+  const [showEditModal, setShowEditModal]     = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [isSubmitting, setIsSubmitting]       = useState(false);
+  const [uploadingImage, setUploadingImage]   = useState(false);
   const [formData, setFormData] = useState({
-    name: "", category: "", price: "", stock: "", description: "", imageUrl: ""
+    name: "", category: "", price: "", stock: "", description: "", imageUrl: "", isNewArrival: false,
   });
-  const [imagePreview, setImagePreview] = useState<string>("");
+  const [imagePreview, setImagePreview]   = useState<string>("");
   const [variantGroups, setVariantGroups] = useState<VariantGroup[]>([]);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
-  const imageUrlRef = useRef<string>("");
+  const imageUrlRef         = useRef<string>("");
 
   const getToken = () => localStorage.getItem("token");
 
-  // ── Fetch products ────────────────────────────────────────────────────────
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${BASE_URL}/products?limit=200`);
+      const res  = await fetch(`${BASE_URL}/products?limit=200`);
       const json = await res.json();
       const list = json?.data?.products || json?.data || [];
-
-      const transformed = list.map((p: any) => ({
-        id: p._id || p.id,
-        name: p.name,
-        category: p.category,
-        price: p.price,
-        stock: p.stock ?? 0,
-        image: (p.images && p.images[0]?.url && p.images[0].url.startsWith("http"))
-          ? p.images[0].url
-          : "/placeholder-product.jpg",
-        rating: p.averageRating || p.rating || 4,
-        variants: p.variants || [],
-      }));
-
-      setProducts(transformed);
-    } catch (err) {
+      setProducts(list.map((p: any) => ({
+        id:           p._id || p.id,
+        name:         p.name,
+        category:     p.category,
+        price:        p.price,
+        stock:        p.stock ?? 0,
+        image:        p.images?.[0]?.url?.startsWith("http") ? p.images[0].url : "/placeholder-product.jpg",
+        rating:       p.averageRating || p.rating || 4,
+        variants:     p.variants || [],
+        isNewArrival: p.isNewArrival || false,
+      })));
+    } catch {
       toast.error("Failed to load products");
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Fetch categories ──────────────────────────────────────────────────────
   const fetchCategories = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/categories`);
+      const res  = await fetch(`${BASE_URL}/categories`);
       const json = await res.json();
-      const cats = json?.data || [];
-      setCategoriesList(cats.map((c: any) => ({
-        id: c._id || c.id,
-        name: c.name,
-        slug: c.slug
-      })));
-    } catch (err) {
-      console.error("Failed to fetch categories");
-    }
+      setCategoriesList((json?.data || []).map((c: any) => ({ id: c._id || c.id, name: c.name, slug: c.slug })));
+    } catch {}
   };
 
-  useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-  }, []);
+  useEffect(() => { fetchProducts(); fetchCategories(); }, []);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
@@ -417,7 +297,6 @@ export default function ProductsPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Category helpers ──────────────────────────────────────────────────────
   const getCategoryName = (cat: any): string => {
     if (!cat) return "";
     if (typeof cat === "string") return cat;
@@ -430,202 +309,112 @@ export default function ProductsPage() {
     return cat._id || cat.id || "";
   };
 
-  const filteredProducts = selectedCategory === "all"
-    ? products
-    : products.filter(p => {
-        const catName = getCategoryName(p.category).toLowerCase();
-        const catId = getCategoryId(p.category);
-        const selectedCat = categoriesList.find(c => c.id === selectedCategory);
-        if (!selectedCat) return false;
-        return catName === selectedCat.name.toLowerCase() ||
-               catId === selectedCat.id ||
-               catName === selectedCat.slug;
-      });
+  const filteredProducts = products.filter(p => {
+    const matchesCategory = selectedCategory === "all" || (() => {
+      const catName = getCategoryName(p.category).toLowerCase();
+      const catId   = getCategoryId(p.category);
+      const sel     = categoriesList.find(c => c.id === selectedCategory);
+      if (!sel) return false;
+      return catName === sel.name.toLowerCase() || catId === sel.id || catName === sel.slug;
+    })();
+    const matchesNewArrival = !showNewArrivalsOnly || p.isNewArrival;
+    return matchesCategory && matchesNewArrival;
+  });
 
-  // ── Upload image to Cloudinary via backend ────────────────────────────────
+  const newArrivalCount = products.filter(p => p.isNewArrival).length;
+
   const handleImageUpload = async (file: File) => {
     setUploadingImage(true);
     try {
       const token = getToken();
-      const fd = new FormData();
+      const fd    = new FormData();
       fd.append("images", file);
-
-      const res = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd
+      const res  = await fetch(`https://luluartistry-backend.onrender.com/uploads/products`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd
       });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Upload error response:", errorText);
-        toast.error(`Upload failed: ${res.status}. Backend issue.`);
-        return;
-      }
-
+      if (!res.ok) { toast.error(`Upload failed: ${res.status}`); return; }
       const json = await res.json();
-
-      if (!json.success || !json.images || json.images.length === 0) {
-        toast.error("Upload failed: No images returned from backend");
-        return;
-      }
-
+      if (!json.success || !json.images?.length) { toast.error("Upload failed"); return; }
       const imageUrl = json.images[0]?.url || json.images[0];
-
-      if (!imageUrl || !imageUrl.startsWith("http")) {
-        toast.error("Invalid image URL returned from server");
-        return;
-      }
-
-      // ✅ Set ref first — this is what handlers will read
+      if (!imageUrl?.startsWith("http")) { toast.error("Invalid image URL"); return; }
       imageUrlRef.current = imageUrl;
       setImagePreview(imageUrl);
       setFormData(prev => ({ ...prev, imageUrl }));
-      toast.success("Image uploaded successfully!");
-
+      toast.success("Image uploaded!");
     } catch (err) {
-      console.error("Upload exception:", err);
-      toast.error("Image upload failed: " + (err as Error).message);
+      toast.error("Image upload failed");
     } finally {
       setUploadingImage(false);
     }
   };
 
   const getStockStatus = (stock: number) => {
-    if (stock === 0) return { text: "Out of stock", color: "text-red-600" };
-    if (stock < 10) return { text: `${stock} units — Very low`, color: "text-red-600" };
-    if (stock < 20) return { text: `${stock} units — Low stock`, color: "text-orange-600" };
-    return { text: `${stock} units — In stock`, color: "text-green-600" };
+    if (stock === 0)  return { text: "Out of stock",           color: "text-red-600" };
+    if (stock < 10)   return { text: `${stock} units — Very low`, color: "text-red-600" };
+    if (stock < 20)   return { text: `${stock} units — Low stock`, color: "text-orange-600" };
+    return             { text: `${stock} units — In stock`,    color: "text-green-600" };
   };
 
   const formatPrice = (price: number) => `₦${price.toLocaleString("en-NG")}`;
 
-  // ── Variant group handlers ───────────────────────────────────────────────
-  const addVariantGroup = () => {
-    setVariantGroups((prev) => [
-      ...prev,
-      {
-        uid: makeUid(),
-        type: "",
-        isCustomType: false,
-        values: [{ uid: makeUid(), value: "", stock: 0, priceAdjustment: 0 }],
-      },
-    ]);
-  };
-
-  const removeVariantGroup = (groupUid: string) => {
-    setVariantGroups((prev) => prev.filter((g) => g.uid !== groupUid));
-  };
-
-  const updateGroupType = (groupUid: string, type: string) => {
-    setVariantGroups((prev) => prev.map((g) => (g.uid === groupUid ? { ...g, type } : g)));
-  };
-
-  const toggleCustomType = (groupUid: string, isCustom: boolean) => {
-    setVariantGroups((prev) =>
-      prev.map((g) =>
-        g.uid === groupUid ? { ...g, isCustomType: isCustom, type: isCustom ? "" : g.type } : g
-      )
-    );
-  };
-
-  const addVariantValue = (groupUid: string) => {
-    setVariantGroups((prev) =>
-      prev.map((g) =>
-        g.uid === groupUid
-          ? { ...g, values: [...g.values, { uid: makeUid(), value: "", stock: 0, priceAdjustment: 0 }] }
-          : g
-      )
-    );
-  };
-
-  const removeVariantValue = (groupUid: string, valueUid: string) => {
-    setVariantGroups((prev) =>
-      prev.map((g) =>
-        g.uid === groupUid ? { ...g, values: g.values.filter((v) => v.uid !== valueUid) } : g
-      )
-    );
-  };
-
- const updateVariantValue = (
-  groupUid: string,
-  valueUid: string,
-  field: "value" | "stock" | "priceAdjustment",
-  newValue: string // This is the raw string from the input
-) => {
-  setVariantGroups((prev) =>
-    prev.map((g) => {
+  // Variant handlers
+  const addVariantGroup    = () => setVariantGroups(p => [...p, { uid: makeUid(), type: "", isCustomType: false, values: [{ uid: makeUid(), value: "", stock: 0, priceAdjustment: 0 }] }]);
+  const removeVariantGroup = (uid: string) => setVariantGroups(p => p.filter(g => g.uid !== uid));
+  const updateGroupType    = (uid: string, type: string) => setVariantGroups(p => p.map(g => g.uid === uid ? { ...g, type } : g));
+  const toggleCustomType   = (uid: string, isCustom: boolean) => setVariantGroups(p => p.map(g => g.uid === uid ? { ...g, isCustomType: isCustom, type: isCustom ? "" : g.type } : g));
+  const addVariantValue    = (uid: string) => setVariantGroups(p => p.map(g => g.uid === uid ? { ...g, values: [...g.values, { uid: makeUid(), value: "", stock: 0, priceAdjustment: 0 }] } : g));
+  const removeVariantValue = (groupUid: string, valueUid: string) => setVariantGroups(p => p.map(g => g.uid === groupUid ? { ...g, values: g.values.filter(v => v.uid !== valueUid) } : g));
+  const updateVariantValue = (groupUid: string, valueUid: string, field: "value" | "stock" | "priceAdjustment", newValue: string) => {
+    setVariantGroups(p => p.map(g => {
       if (g.uid !== groupUid) return g;
-      return {
-        ...g,
-        values: g.values.map((v) => {
-          if (v.uid !== valueUid) return v;
+      return { ...g, values: g.values.map(v => {
+        if (v.uid !== valueUid) return v;
+        if (field === "value") return { ...v, value: newValue };
+        const num = newValue === "" ? 0 : parseFloat(newValue);
+        return { ...v, [field]: isNaN(num) ? 0 : num };
+      })};
+    }));
+  };
 
-          // If the field is the text "value", just return the string
-          if (field === "value") return { ...v, value: newValue };
+  const resetForm = () => {
+    setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "", isNewArrival: false });
+    setImagePreview("");
+    imageUrlRef.current = "";
+    setVariantGroups([]);
+  };
 
-          // If it's a number field, handle empty strings and parsing safely
-          // This prevents the "0" stuck issue and allows for clearing the field
-          const num = newValue === "" ? 0 : parseFloat(newValue);
-          return { ...v, [field]: isNaN(num) ? 0 : num };
-        }),
-      };
-    })
-  );
-};
-
-  // ── Add product ───────────────────────────────────────────────────────────
+  // ── Add product ────────────────────────────────────────────────────────────
   const handleAddProduct = async () => {
     if (!formData.name || !formData.category || !formData.price || !formData.stock) {
-      toast.error("Please fill in all required fields");
-      return;
+      toast.error("Please fill in all required fields"); return;
     }
-
-    if (!imageUrlRef.current || !imageUrlRef.current.startsWith("http")) {
-      toast.error("Please upload a product image");
-      return;
+    if (!imageUrlRef.current?.startsWith("http")) {
+      toast.error("Please upload a product image"); return;
     }
-
     const variantError = validateVariantGroups(variantGroups);
-    if (variantError) {
-      toast.error(variantError);
-      return;
-    }
+    if (variantError) { toast.error(variantError); return; }
 
     setIsSubmitting(true);
     try {
       const token = getToken();
-      const payload = {
-        name: formData.name,
-        category: formData.category,
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
-        description: formData.description || "",
-        images: [{ url: imageUrlRef.current, alt: formData.name }],
-        image: imageUrlRef.current
-      };
-
-      const res = await fetch(`${BASE_URL}/products`, {
+      const res   = await fetch(`${BASE_URL}/products`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: formData.name,
-          category: formData.category,
-          price: parseFloat(formData.price),
-          stock: parseInt(formData.stock),
-          description: formData.description || "",
-          images: [{ url: imageUrlRef.current, alt: formData.name }]
+          name:         formData.name,
+          category:     formData.category,
+          price:        parseFloat(formData.price),
+          stock:        parseInt(formData.stock),
+          description:  formData.description || "",
+          images:       [{ url: imageUrlRef.current, alt: formData.name }],
+          isNewArrival: formData.isNewArrival,
         })
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || json.message || "Failed to add product");
-
-      toast.success("Product added successfully!");
+      toast.success("Product added!");
       setShowAddModal(false);
-      setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" });
-      setImagePreview("");
-      imageUrlRef.current = "";
-      setVariantGroups([]);
+      resetForm();
       fetchProducts();
     } catch (err: any) {
       toast.error(err.message);
@@ -634,53 +423,40 @@ export default function ProductsPage() {
     }
   };
 
-  // ── Edit product ──────────────────────────────────────────────────────────
+  // ── Edit product ────────────────────────────────────────────────────────────
   const handleEditProduct = async () => {
     if (!selectedProduct || !formData.name || !formData.category || !formData.price || !formData.stock) {
-      toast.error("Please fill in all required fields");
-      return;
+      toast.error("Please fill in all required fields"); return;
     }
-
     const variantError = validateVariantGroups(variantGroups);
-    if (variantError) {
-      toast.error(variantError);
-      return;
-    }
+    if (variantError) { toast.error(variantError); return; }
 
     setIsSubmitting(true);
     try {
       const token = getToken();
-
       const body: any = {
-        name: formData.name,
-        category: formData.category,
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
-        description: formData.description || "",
-        variants: flattenVariants(variantGroups)
+        name:         formData.name,
+        category:     formData.category,
+        price:        parseFloat(formData.price),
+        stock:        parseInt(formData.stock),
+        description:  formData.description || "",
+        variants:     flattenVariants(variantGroups),
+        isNewArrival: formData.isNewArrival,
       };
-
-      // ✅ Only update image if a new one was uploaded via ref
-      if (imageUrlRef.current && imageUrlRef.current.startsWith("http")) {
+      if (imageUrlRef.current?.startsWith("http")) {
         body.images = [{ url: imageUrlRef.current, alt: formData.name }];
-        body.image = imageUrlRef.current;
       }
-
-      const res = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
+      const res  = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || json.message || "Failed to update product");
-
-      toast.success("Product updated successfully!");
+      if (!res.ok) throw new Error(json.error || json.message || "Failed to update");
+      toast.success("Product updated!");
       setShowEditModal(false);
       setSelectedProduct(null);
-      setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" });
-      setImagePreview("");
-      imageUrlRef.current = "";
-      setVariantGroups([]);
+      resetForm();
       fetchProducts();
     } catch (err: any) {
       toast.error(err.message);
@@ -689,20 +465,16 @@ export default function ProductsPage() {
     }
   };
 
-  // ── Delete product ────────────────────────────────────────────────────────
+  // ── Delete product ──────────────────────────────────────────────────────────
   const handleDeleteProduct = async () => {
     if (!selectedProduct) return;
     setIsSubmitting(true);
     try {
       const token = getToken();
-      const res = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
+      const res   = await fetch(`${BASE_URL}/products/${selectedProduct.id}`, {
+        method: "DELETE", headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error || "Failed to delete product");
-      }
+      if (!res.ok) { const json = await res.json(); throw new Error(json.error || "Failed to delete"); }
       toast.success("Product deleted!");
       setShowDeleteModal(false);
       setSelectedProduct(null);
@@ -716,23 +488,23 @@ export default function ProductsPage() {
 
   const openEditModal = (product: Product) => {
     setSelectedProduct(product);
-    const catId = getCategoryId(product.category);
     const existingImage = product.image !== "/placeholder-product.jpg" ? product.image : "";
-    // ✅ Seed ref with existing image so edit without re-upload still sends it
     imageUrlRef.current = existingImage;
     setFormData({
-      name: product.name,
-      category: catId,
-      price: product.price.toString(),
-      stock: product.stock.toString(),
-      description: "",
-      imageUrl: existingImage
+      name:         product.name,
+      category:     getCategoryId(product.category),
+      price:        product.price.toString(),
+      stock:        product.stock.toString(),
+      description:  "",
+      imageUrl:     existingImage,
+      isNewArrival: product.isNewArrival,
     });
     setImagePreview(existingImage);
     setVariantGroups(groupVariants(product.variants || []));
     setShowEditModal(true);
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -740,36 +512,55 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-600 mt-1">Manage beauty products ({products.length} total)</p>
         </div>
-        <button onClick={() => { setFormData({ name: "", category: "", price: "", stock: "", description: "", imageUrl: "" }); setImagePreview(""); imageUrlRef.current = ""; setVariantGroups([]); setShowAddModal(true); }}
-          className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors">
+        <button
+          onClick={() => { resetForm(); setShowAddModal(true); }}
+          className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+        >
           <Plus size={20} /> Add Product
         </button>
       </div>
 
-      {/* Category Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Filter by Category</label>
-        <div className="relative w-64" ref={categoryDropdownRef}>
-          <button onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-            className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50">
-            <span>{selectedCategory === "all" ? "All Categories" : categoriesList.find(c => c.id === selectedCategory)?.name || "All Categories"}</span>
-            <ChevronDown size={18} className="text-gray-400" />
-          </button>
-          {showCategoryDropdown && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-              <button onClick={() => { setSelectedCategory("all"); setShowCategoryDropdown(false); }}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-t-lg text-sm">
-                All Categories
-              </button>
-              {categoriesList.map(cat => (
-                <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setShowCategoryDropdown(false); }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 last:rounded-b-lg text-sm">
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-          )}
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-wrap gap-4 items-end">
+        {/* Category filter */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Filter by Category</label>
+          <div className="relative w-56" ref={categoryDropdownRef}>
+            <button onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+              className="w-full flex items-center justify-between px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50">
+              <span>{selectedCategory === "all" ? "All Categories" : categoriesList.find(c => c.id === selectedCategory)?.name || "All"}</span>
+              <ChevronDown size={18} className="text-gray-400" />
+            </button>
+            {showCategoryDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                <button onClick={() => { setSelectedCategory("all"); setShowCategoryDropdown(false); }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-t-lg text-sm">All Categories</button>
+                {categoriesList.map(cat => (
+                  <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setShowCategoryDropdown(false); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 last:rounded-b-lg text-sm">{cat.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* New Arrivals filter */}
+        <button
+          onClick={() => setShowNewArrivalsOnly(!showNewArrivalsOnly)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 font-semibold text-sm transition-all ${
+            showNewArrivalsOnly
+              ? "border-yellow-500 bg-yellow-50 text-yellow-700"
+              : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+          }`}
+        >
+          <Sparkles size={16} />
+          New Arrivals
+          {newArrivalCount > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${showNewArrivalsOnly ? "bg-yellow-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+              {newArrivalCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Products Grid */}
@@ -779,21 +570,18 @@ export default function ProductsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {filteredProducts.map((product) => {
             const stockStatus = getStockStatus(product.stock);
-            const variantTypeCount = new Set((product.variants || []).map(v => v.type)).size;
             return (
               <div key={product.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="relative h-48 bg-gray-100">
                   <Image src={product.image} alt={product.name} fill className="object-cover" />
+                  {product.isNewArrival && (
+                    <span className="absolute top-2 left-2 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Sparkles size={10} /> NEW
+                    </span>
+                  )}
                 </div>
                 <div className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs text-gray-400 capitalize">{getCategoryName(product.category)}</p>
-                    {variantTypeCount > 0 && (
-                      <span className="bg-yellow-50 text-yellow-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
-                        {variantTypeCount} option{variantTypeCount !== 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-xs text-gray-400 capitalize mb-1">{getCategoryName(product.category)}</p>
                   <h3 className="font-semibold text-gray-900 mb-2 text-sm leading-tight">{product.name}</h3>
                   <p className="text-lg font-bold text-gray-900 mb-2">{formatPrice(product.price)}</p>
                   <div className="flex items-center gap-1 mb-2">
@@ -804,11 +592,11 @@ export default function ProductsPage() {
                   <p className={`text-xs mb-4 ${stockStatus.color}`}>{stockStatus.text}</p>
                   <div className="flex gap-2">
                     <button onClick={() => openEditModal(product)}
-                      className="flex-1 flex items-center justify-center gap-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm">
+                      className="flex-1 flex items-center justify-center gap-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg text-sm">
                       <Edit size={14} /> Edit
                     </button>
                     <button onClick={() => { setSelectedProduct(product); setShowDeleteModal(true); }}
-                      className="flex-1 flex items-center justify-center gap-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm">
+                      className="flex-1 flex items-center justify-center gap-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 rounded-lg text-sm">
                       <Trash2 size={14} /> Delete
                     </button>
                   </div>
@@ -817,28 +605,20 @@ export default function ProductsPage() {
             );
           })}
           {filteredProducts.length === 0 && (
-            <div className="col-span-4 text-center py-20 text-gray-500">No products found in this category</div>
+            <div className="col-span-4 text-center py-20 text-gray-400">No products found</div>
           )}
         </div>
       )}
 
       {/* Add Modal */}
       {showAddModal && (
-  <>
-    {/* Glassmorphic Overlay */}
-    <div 
-      className="fixed inset-0 bg-white/10 backdrop-blur-sm z-50 transition-all duration-300" 
-      onClick={() => setShowAddModal(false)} 
-    />
-
-    {/* Modal Container with Glassmorphism */}
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-      <div className="bg-white/70 backdrop-blur-lg border border-white/40 shadow-2xl rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">Add New Product</h2>
-          <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-black/5 rounded-lg transition-colors">
-            <X size={20} />
-          </button>
+        <>
+          <div className="fixed inset-0 bg-white/10 backdrop-blur-sm z-50" onClick={() => setShowAddModal(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white/70 backdrop-blur-lg border border-white/40 shadow-2xl rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Add New Product</h2>
+                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-black/5 rounded-lg"><X size={20} /></button>
               </div>
               <div className="space-y-4">
                 <div>
@@ -863,9 +643,6 @@ export default function ProductsPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Stock *</label>
                   <input type="number" value={formData.stock} onChange={e => setFormData({ ...formData, stock: e.target.value })}
                     placeholder="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" />
-                  {variantGroups.length > 0 && (
-                    <p className="text-xs text-gray-400 mt-1">Stock is tracked per variant below once added.</p>
-                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
@@ -873,30 +650,23 @@ export default function ProductsPage() {
                     placeholder="Product description" rows={2}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" />
                 </div>
-                <ImageField
-                  imagePreview={imagePreview}
-                  uploadingImage={uploadingImage}
-                  onUpload={handleImageUpload}
-                  onRemove={() => { setImagePreview(""); setFormData(p => ({ ...p, imageUrl: "" })); imageUrlRef.current = ""; }}
+                <ImageField imagePreview={imagePreview} uploadingImage={uploadingImage} onUpload={handleImageUpload}
+                  onRemove={() => { setImagePreview(""); setFormData(p => ({ ...p, imageUrl: "" })); imageUrlRef.current = ""; }} />
+                {/* New Arrival Toggle */}
+                <NewArrivalToggle
+                  checked={formData.isNewArrival}
+                  onChange={(v) => setFormData(p => ({ ...p, isNewArrival: v }))}
                 />
-                <VariantsSection
-                  groups={variantGroups}
-                  onAddGroup={addVariantGroup}
-                  onRemoveGroup={removeVariantGroup}
-                  onUpdateGroupType={updateGroupType}
-                  onToggleCustomType={toggleCustomType}
-                  onAddValue={addVariantValue}
-                  onRemoveValue={removeVariantValue}
-                  onUpdateValue={updateVariantValue}
-                />
+                <VariantsSection groups={variantGroups} onAddGroup={addVariantGroup} onRemoveGroup={removeVariantGroup}
+                  onUpdateGroupType={updateGroupType} onToggleCustomType={toggleCustomType} onAddValue={addVariantValue}
+                  onRemoveValue={removeVariantValue} onUpdateValue={updateVariantValue} />
               </div>
               <div className="flex gap-4 mt-6">
                 <button onClick={() => setShowAddModal(false)}
                   className="flex-1 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-lg">Cancel</button>
                 <button onClick={handleAddProduct} disabled={isSubmitting}
                   className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 rounded-lg disabled:opacity-60 flex items-center justify-center gap-2">
-                  {isSubmitting && <Loader size={16} className="animate-spin" />}
-                  Add Product
+                  {isSubmitting && <Loader size={16} className="animate-spin" />} Add Product
                 </button>
               </div>
             </div>
@@ -936,34 +706,24 @@ export default function ProductsPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Stock *</label>
                   <input type="number" value={formData.stock} onChange={e => setFormData({ ...formData, stock: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" />
-                  {variantGroups.length > 0 && (
-                    <p className="text-xs text-gray-400 mt-1">Stock is tracked per variant below.</p>
-                  )}
                 </div>
-                <ImageField
-                  imagePreview={imagePreview}
-                  uploadingImage={uploadingImage}
-                  onUpload={handleImageUpload}
-                  onRemove={() => { setImagePreview(""); setFormData(p => ({ ...p, imageUrl: "" })); imageUrlRef.current = ""; }}
+                <ImageField imagePreview={imagePreview} uploadingImage={uploadingImage} onUpload={handleImageUpload}
+                  onRemove={() => { setImagePreview(""); setFormData(p => ({ ...p, imageUrl: "" })); imageUrlRef.current = ""; }} />
+                {/* New Arrival Toggle */}
+                <NewArrivalToggle
+                  checked={formData.isNewArrival}
+                  onChange={(v) => setFormData(p => ({ ...p, isNewArrival: v }))}
                 />
-                <VariantsSection
-                  groups={variantGroups}
-                  onAddGroup={addVariantGroup}
-                  onRemoveGroup={removeVariantGroup}
-                  onUpdateGroupType={updateGroupType}
-                  onToggleCustomType={toggleCustomType}
-                  onAddValue={addVariantValue}
-                  onRemoveValue={removeVariantValue}
-                  onUpdateValue={updateVariantValue}
-                />
+                <VariantsSection groups={variantGroups} onAddGroup={addVariantGroup} onRemoveGroup={removeVariantGroup}
+                  onUpdateGroupType={updateGroupType} onToggleCustomType={toggleCustomType} onAddValue={addVariantValue}
+                  onRemoveValue={removeVariantValue} onUpdateValue={updateVariantValue} />
               </div>
               <div className="flex gap-4 mt-6">
                 <button onClick={() => setShowEditModal(false)}
                   className="flex-1 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-lg">Cancel</button>
                 <button onClick={handleEditProduct} disabled={isSubmitting}
                   className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 rounded-lg disabled:opacity-60 flex items-center justify-center gap-2">
-                  {isSubmitting && <Loader size={16} className="animate-spin" />}
-                  Save Changes
+                  {isSubmitting && <Loader size={16} className="animate-spin" />} Save Changes
                 </button>
               </div>
             </div>
@@ -987,8 +747,7 @@ export default function ProductsPage() {
                   className="flex-1 border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-lg">Keep it</button>
                 <button onClick={handleDeleteProduct} disabled={isSubmitting}
                   className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-lg disabled:opacity-60 flex items-center justify-center gap-2">
-                  {isSubmitting && <Loader size={16} className="animate-spin" />}
-                  Yes, Delete
+                  {isSubmitting && <Loader size={16} className="animate-spin" />} Yes, Delete
                 </button>
               </div>
             </div>

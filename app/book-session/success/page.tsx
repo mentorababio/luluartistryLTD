@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle, Download, Calendar, Phone } from "lucide-react";
+import { CheckCircle, Download, Calendar, Phone, MapPin } from "lucide-react";
 
 function formatPrice(price: string | number) {
   const n = typeof price === "string" ? parseFloat(price) : price;
@@ -18,19 +18,18 @@ function formatDate(dateString: string) {
   });
 }
 
-// ---------------------------------------------------------------------------
 const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
 
-  const bookingNumber    = searchParams.get("bookingNumber")    || "";
-  const service          = searchParams.get("service")          || "";
-  const fullName         = searchParams.get("fullName")         || "";
-  const email            = searchParams.get("email")            || "";
-  const phone            = searchParams.get("phone")            || "";
-  const date             = searchParams.get("date")             || "";
-  const time             = searchParams.get("time")             || "";
-  const price            = searchParams.get("price")            || "0";
-  const paymentMethod    = searchParams.get("paymentMethod")    || "";
+  const bookingNumber     = searchParams.get("bookingNumber")     || "";
+  const service           = searchParams.get("service")           || "";
+  const fullName          = searchParams.get("fullName")          || "";
+  const email             = searchParams.get("email")             || "";
+  const phone             = searchParams.get("phone")             || "";
+  const date              = searchParams.get("date")              || "";
+  const time              = searchParams.get("time")              || "";
+  const price             = searchParams.get("price")             || "0";
+  const paymentMethod     = searchParams.get("paymentMethod")     || "";
   const transferReference = searchParams.get("transferReference") || "";
 
   const depositAmount = Math.round((parseFloat(price) || 0) * 0.5);
@@ -128,6 +127,10 @@ Phone:  ${phone}
             <span className="font-bold text-yellow-500">{formatPrice(depositAmount)}</span>
           </div>
           <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Balance</span>
+            <span className="text-gray-500">{formatPrice(Math.round(parseFloat(price) * 0.5))} (pay on the day)</span>
+          </div>
+          <div className="flex justify-between text-sm">
             <span className="text-gray-500">Status</span>
             <span className={`font-semibold ${isTransfer ? "text-orange-500" : "text-green-600"}`}>
               {isTransfer ? "Awaiting Confirmation" : "Confirmed"}
@@ -152,6 +155,16 @@ Phone:  ${phone}
           </div>
         )}
 
+        {/* Save reference reminder */}
+        {bookingNumber && (
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-left">
+            <p className="text-sm text-blue-800 font-semibold mb-1">Save Your Reference</p>
+            <p className="text-xs text-blue-700">
+              Use <span className="font-bold">{bookingNumber}</span> to track your booking anytime.
+            </p>
+          </div>
+        )}
+
         {/* Actions */}
         <button
           onClick={handleDownloadReceipt}
@@ -160,6 +173,15 @@ Phone:  ${phone}
           <Download size={16} />
           Download Receipt
         </button>
+
+        {/* Track My Booking — key new button */}
+        <Link
+          href={`/my-bookings${bookingNumber ? `?ref=${bookingNumber}` : ""}`}
+          className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 mb-3"
+        >
+          <MapPin size={16} />
+          Track My Booking
+        </Link>
 
         <Link href="/book-session">
           <button className="w-full border border-gray-200 text-gray-600 font-medium py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 mb-3">

@@ -43,9 +43,17 @@ interface Booking {
     paymentMethod?: string;
   };
   status: string;
-  notes?: {
+ notes?: {
     customerNotes?: string;
     adminNotes?: string;
+  };
+  rescheduleRequest?: {
+    requestedDate: string;
+    requestedTime: string;
+    reason?: string;
+    status: "pending" | "approved" | "rejected";
+    requestedAt: string;
+    adminResponse?: string;
   };
   createdAt: string;
 }
@@ -90,7 +98,8 @@ export default function BookingsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
   const [adminNote, setAdminNote] = useState("");
-
+ const [rescheduleLoading, setRescheduleLoading] = useState<string | null>(null);
+ const [rescheduleNote, setRescheduleNote] = useState("");
   const getToken = () => localStorage.getItem("token");
 
   const fetchBookings = async () => {
@@ -137,6 +146,27 @@ export default function BookingsPage() {
       setActionLoading(null);
     }
   };
+  const handleRescheduleResponse = async (bookingId: string, status: 'approved' | 'rejected', note: string) => {
+  setRescheduleLoading(bookingId + "-" + status);
+  try {
+    const token = getToken();
+    const res = await fetch(`${BASE_URL}/bookings/${bookingId}/reschedule/respond`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status, adminResponse: note })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Failed to respond");
+    toast.success(`Reschedule ${status}!`);
+    setShowModal(false);
+    setRescheduleNote("");
+    fetchBookings();
+  } catch (err: any) {
+    toast.error(err.message || "Failed to respond");
+  } finally {
+    setRescheduleLoading(null);
+  }
+};
 
   const handleCancel = async (bookingId: string) => {
     setActionLoading(bookingId + "-cancel");
@@ -420,6 +450,104 @@ export default function BookingsPage() {
                     </p>
                   </div>
                 )}
+                
+
+{selectedBooking.rescheduleRequest?.status === "pending" && (
+  <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4 space-y-3">
+    {/* Banner */}
+    <div className="flex items-center gap-2">
+      <div className="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center flex-shrink-0">
+        <span className="text-black font-bold text-sm">!</span>
+      </div>
+      <div>
+        <p className="font-bold text-yellow-800 text-sm">Reschedule Requested</p>
+        <p className="text-xs text-yellow-700">Customer wants to change their appointment</p>
+      </div>
+    </div>
+
+    {/* Request details */}
+    <div className="bg-white rounded-lg p-3 space-y-1.5 text-sm">
+      <div className="flex justify-between">
+        <span className="text-gray-500">New Date</span>
+        <span className="font-semibold text-gray-800">
+          {new Date(selectedBooking.rescheduleRequest.requestedDate).toLocaleDateString("en-GB", {
+            weekday: "short", day: "2-digit", month: "short", year: "numeric"
+          })}
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-gray-500">New Time</span>
+        <span className="font-semibold text-gray-800">{selectedBooking.rescheduleRequest.requestedTime}</span>
+      </div>
+      {selectedBooking.rescheduleRequest.reason && (
+        <div className="pt-1 border-t border-gray-100">
+          <p className="text-gray-500 text-xs">Customer reason:</p>
+          <p className="text-gray-700 mt-0.5">{selectedBooking.rescheduleRequest.reason}</p>
+        </div>
+      )}
+    </div>
+
+    {/* Admin response note */}
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">
+        Response note (optional)
+      </label>
+      <textarea
+        value={rescheduleNote}
+        onChange={(e) => setRescheduleNote(e.target.value)}
+        placeholder="e.g. Confirmed for new date, please arrive 10 mins early..."
+        rows={2}
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+      />
+    </div>
+
+    {/* Approve / Reject buttons */}
+    <div className="flex gap-3">
+      <button
+        onClick={() => handleRescheduleResponse(selectedBooking._id, "rejected", rescheduleNote)}
+        disabled={!!rescheduleLoading}
+        className="flex-1 bg-red-500 hover:bg-red-600 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-1"
+      >
+        {rescheduleLoading === selectedBooking._id + "-rejected"
+          ? <Loader size={14} className="animate-spin" />
+          : <XCircle size={14} />}
+        Reject
+      </button>
+      <button
+        onClick={() => handleRescheduleResponse(selectedBooking._id, "approved", rescheduleNote)}
+        disabled={!!rescheduleLoading}
+        className="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-1"
+      >
+        {rescheduleLoading === selectedBooking._id + "-approved"
+          ? <Loader size={14} className="animate-spin" />
+          : <CheckCircle size={14} />}
+        Approve
+      </button>
+    </div>
+  </div>
+)}
+
+{/* Show approved/rejected reschedule status */}
+{selectedBooking.rescheduleRequest?.status === "approved" && (
+  <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm">
+    <p className="font-semibold text-green-700">✅ Reschedule Approved</p>
+    <p className="text-green-600 text-xs mt-1">
+      New date: {new Date(selectedBooking.rescheduleRequest.requestedDate).toLocaleDateString("en-GB")} at {selectedBooking.rescheduleRequest.requestedTime}
+    </p>
+    {selectedBooking.rescheduleRequest.adminResponse && (
+      <p className="text-green-600 text-xs mt-1">Note: {selectedBooking.rescheduleRequest.adminResponse}</p>
+    )}
+  </div>
+)}
+
+{selectedBooking.rescheduleRequest?.status === "rejected" && (
+  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm">
+    <p className="font-semibold text-red-700">❌ Reschedule Rejected</p>
+    {selectedBooking.rescheduleRequest.adminResponse && (
+      <p className="text-red-600 text-xs mt-1">Note: {selectedBooking.rescheduleRequest.adminResponse}</p>
+    )}
+  </div>
+)}
 
                 {/* Admin Note Input */}
                 {["pending", "confirmed", "in-progress"].includes(selectedBooking.status) && (
@@ -434,6 +562,7 @@ export default function BookingsPage() {
                     />
                   </div>
                 )}
+        
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-3 pt-2">

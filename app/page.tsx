@@ -39,7 +39,10 @@ const page = () => {
   useEffect(() => {
     const fetchNewArrivals = async () => {
       try {
-        const res  = await fetch(`${BASE_URL}/products?isNewArrival=true&limit=8`);
+       const res = await fetch(
+  `${BASE_URL}/products?isNewArrival=true&limit=8`,
+  { cache: "no-store" }
+);
         const json = await res.json();
         const list = json?.data?.products || json?.data || [];
         setNewArrivals(

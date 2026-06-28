@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  User, ShoppingBag, Heart, CreditCard, HelpCircle,
+  User, ShoppingBag, Heart, CreditCard, HelpCircle,Calendar,
   LogOut, Edit2, ChevronRight, Home, X, Plus, Trash2,
   Building2, Check,
 } from "lucide-react";
@@ -224,17 +224,34 @@ export default function DashboardPage() {
   ? latestOrder.orderNumber || `ORD-${(latestOrder._id || latestOrder.id || "").slice(-8).toUpperCase()}`
   : <span className="text-gray-400">No orders yet</span>}
               </div>
-              <Link href="/orders">
-                <button className="border border-[#C9A84C] text-[#C9A84C] text-sm px-4 py-1.5 rounded hover:bg-[#C9A84C] hover:text-white transition-colors">
-                  View All Order
-                </button>
-              </Link>
-            </div>
+             <Link href="/orders">
+  <button className="border border-[#C9A84C] text-[#C9A84C] text-sm px-4 py-1.5 rounded hover:bg-[#C9A84C] hover:text-white transition-colors">
+    View All Order
+  </button>
+</Link>
+</div>
 
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-2 text-gray-700 font-semibold mb-3">
-                <Heart size={18} className="text-gray-500" />
-                Saved Items ({wishlistCount})
+{/* My Bookings Card */}
+<div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+  <div className="flex items-center gap-2 text-gray-700 font-semibold mb-3">
+    <Calendar size={18} className="text-gray-500" />
+    My Bookings
+  </div>
+  <div className="text-sm text-gray-500 mb-1">Track your appointments</div>
+  <div className="text-sm text-gray-800 mb-3">
+    View status, payment and reschedule requests
+  </div>
+  <Link href="/my-bookings">
+    <button className="border border-[#C9A84C] text-[#C9A84C] text-sm px-4 py-1.5 rounded hover:bg-[#C9A84C] hover:text-white transition-colors">
+      View My Bookings
+    </button>
+  </Link>
+</div>
+
+<div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+  <div className="flex items-center gap-2 text-gray-700 font-semibold mb-3">
+    <Heart size={18} className="text-gray-500" />
+    Saved Items ({wishlistCount})
               </div>
               <div className="text-sm text-gray-500 mb-1">Latest Items</div>
               <div className="text-sm text-gray-800 mb-3">

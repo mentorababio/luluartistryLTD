@@ -40,7 +40,10 @@ const Newarrival = () => {
     const fetchNewArrivals = async () => {
       try {
         setLoading(true);
-        const res  = await fetch(`${BASE_URL}/products?isNewArrival=true&limit=50`);
+        const res = await fetch(
+  `${BASE_URL}/products?isNewArrival=true&limit=50`,
+  { cache: "no-store" }
+);
         const json = await res.json();
         const list = json?.data?.products || json?.data || [];
 

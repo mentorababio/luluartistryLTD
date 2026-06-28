@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -44,25 +44,31 @@ const BookSessionPage = () => {
 		time: "",
 		notes: ""
 	});
-	const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (!token) return;
 
-    fetch("https://luluartistry-backend.onrender.com/api/auth/me", {
-        headers: { Authorization: `Bearer ${token}` },
-    })
-        .then((res) => res.json())
-        .then((data) => {
-            if (data?.data) {
-                const user = data.data;
-                setFormData((prev) => ({
-                    ...prev,
-                    name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
-                    email: user.email || "",
-                    phone: user.phone || "",
-                }));
-            }
-        })
-        .catch(() => {});
+	// ── Pre-fill from logged-in user, if any ──────────────────────────────────
+	// Runs once on mount. No longer blocks rendering the page for visitors
+	// who aren't logged in — it only ever fills in the form fields.
+	useEffect(() => {
+		const token = localStorage.getItem("token");
+		if (!token) return;
+
+		fetch("https://luluartistry-backend.onrender.com/api/auth/me", {
+			headers: { Authorization: `Bearer ${token}` },
+		})
+			.then((res) => res.json())
+			.then((data) => {
+				if (data?.data) {
+					const user = data.data;
+					setFormData((prev) => ({
+						...prev,
+						name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+						email: user.email || "",
+						phone: user.phone || "",
+					}));
+				}
+			})
+			.catch(() => {});
+	}, []);
 
 	const services = [
 		{

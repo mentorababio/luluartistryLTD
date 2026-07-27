@@ -1,5 +1,25 @@
 "use client";
 
+import { Palette } from "lucide-react";
+
+export default function ArtistsPage() {
+	return (
+		<div className="flex items-center justify-center min-h-[60vh]">
+			<div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center max-w-md">
+				<div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+					<Palette className="text-yellow-600" size={40} />
+				</div>
+				<h2 className="text-2xl font-bold text-gray-900 mb-2">Training</h2>
+				<p className="text-gray-600">This feature is coming soon</p>
+			</div>
+		</div>
+	);
+}
+
+
+
+/** "use client";
+
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -234,7 +254,7 @@ const TrainingPage = () => {
 
 	return (
 		<div className="min-h-screen bg-white">
-			{/* Hero Section */}
+			{/* Hero Section */  /*}
 			<section className="bg-[#4a4a4a] text-white py-20">
 				<div className="max-w-7xl mx-auto px-6 text-center">
 					<h1 className="text-4xl md:text-5xl font-bold text-yellow-500 mb-4">
@@ -260,7 +280,7 @@ const TrainingPage = () => {
 				</div>
 			</section>
 
-			{/* Our Training Programs Section */}
+			{/* Our Training Programs Section */ /*}
 			<section className="py-16 bg-white">
 				<div className="max-w-7xl mx-auto px-6">
 					<div className="text-center mb-12">
@@ -270,7 +290,7 @@ const TrainingPage = () => {
 						</p>
 					</div>
 
-					{/* Filter Tabs */}
+					{/* Filter Tabs */ /*}
 					<div className="flex flex-wrap justify-center gap-4 mb-12">
 						{categories.map((category) => (
 							<button
@@ -287,7 +307,7 @@ const TrainingPage = () => {
 						))}
 					</div>
 
-					{/* Training Cards Grid */}
+					{/* Training Cards Grid *//*}
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
 						{filteredCourses.map((course) => (
 							<div
@@ -328,7 +348,7 @@ const TrainingPage = () => {
 				</div>
 			</section>
 
-			{/* About Training Section */}
+			{/* About Training Section *//*}
 			<section className="py-16 bg-white">
 				<div className="max-w-7xl mx-auto px-6">
 					<div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -377,7 +397,7 @@ const TrainingPage = () => {
 				</div>
 			</section>
 
-			{/* Book Training Section */}
+			{/* Book Training Section *//*}
 			<section id="appointment" className="py-16 bg-white">
 				<div className="max-w-7xl mx-auto px-6">
 					<div className="text-center mb-12">
@@ -388,7 +408,7 @@ const TrainingPage = () => {
 					</div>
 
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-						{/* Training Form */}
+						{/* Training Form *//*}
 						<div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-8">
 							<h3 className="text-2xl font-bold text-gray-800 mb-6">Training Details</h3>
 							<form 
@@ -487,21 +507,21 @@ const TrainingPage = () => {
 							</form>
 						</div>
 
-						{/* Studio Information Card */}
+						{/* Studio Information Card *//*}
 						<div className="bg-yellow-500 rounded-xl p-8 text-black">
 							<h3 className="text-2xl font-bold mb-6">Lulu's Beauty Studio</h3>
 							<div className="space-y-4 mb-8">
 								<div className="flex items-start gap-3">
 									<MapPin className="w-5 h-5 mt-1 flex-shrink-0" />
-									<p className="text-sm">123 Beauty Lane, Suite 456, Lagos, Nigeria</p>
+									<p className="text-sm">Shop A51,calabar municipal plaza Marian , Calabar</p>
 								</div>
 								<div className="flex items-start gap-3">
 									<Phone className="w-5 h-5 mt-1 flex-shrink-0" />
-									<p className="text-sm">+234 801 234 5678</p>
+									<p className="text-sm"> 07031002094</p>
 								</div>
 								<div className="flex items-start gap-3">
 									<Mail className="w-5 h-5 mt-1 flex-shrink-0" />
-									<p className="text-sm">info@luluartistry.ng</p>
+									<p className="text-sm"> lulusartistry321@gmail.com</p>
 								</div>
 								<div className="flex items-start gap-3">
 									<Clock className="w-5 h-5 mt-1 flex-shrink-0" />
@@ -522,4 +542,4 @@ const TrainingPage = () => {
 	);
 };
 
-export default TrainingPage;
+export default TrainingPage; */

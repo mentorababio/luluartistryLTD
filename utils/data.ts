@@ -55,7 +55,7 @@ export const headerLinks: NavItem[] = [
   },
   {
     title: "Training",
-    link: "/book-session?type=training",
+link: "/training",
   },
   {
     title: "New Arrivals",

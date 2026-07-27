@@ -124,7 +124,7 @@ const Footer = () => {
 					<p className='font-semibold mb-3'>Contact Information</p>
 					<div className='flex flex-col gap-2 text-sm'>
 						<p className='flex items-center gap-2'>
-							<MapPin size={16} /> 123 Beauty Street, Calabar, Nigeria
+							<MapPin size={24} /> Shop A51,calabar municipal plaza Marian , Calabar
 						</p>
 						<p className='flex items-center gap-2'>
 							<Mail size={16} /> lulusartistry321@gmail.com

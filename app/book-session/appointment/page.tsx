@@ -1,319 +1,457 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { lulu } from "@/assets";
 import Image from "next/image";
-import { ArrowLeft, Calendar, MapPin, User } from "lucide-react";
+import { MapPin, Clock, Phone, Mail } from "lucide-react";
+import { lulu } from "@/assets";
 import toast from "react-hot-toast";
 
-// ---------------------------------------------------------------------------
-// Base prices (Lulu = full price)
-// Sarah = 10% less, Maya = 15% less
-// ---------------------------------------------------------------------------
-const BASE_PRICES: Record<string, number> = {
-  "Ombré Powder Brows":                      700000,
-  "Signature Combo Brows":                    80000,
-  "Microshading":                             70000,
-  "Brow Lamination & Tint":                   40000,
-  "Brow Touch-up (All Types)":                60000,
-  "Classic Set":                              20000,
-  "Hybrid Set":                               25000,
-  "Volume Set":                             1200000,
-  " MegaVolume Set":                          40000,
-  " Bottom Lashes":                           10000,
-  " Wispy Add-On":                             8000,
-  " The Aleks Set":                           50000,
-  " Dolly Set":                               66000,
-  " Flirty Fox Eye":                          40000,
-  " The Eb Luxe Set":                         40000,
-  " Private Brow Training":                  400000,
-  "Group Brow Training":                     300000,
-  " Private Lash Training":                  300000,
-  " Group Lash Training":                    200000,
-  " Private Combo Lash + Brow Training":     650000,
-  " Group Combo Lash + Brow Training":       450000,
-  "Private Brow Lamination & Tint Training": 150000,
-};
+const BASE_URL = "https://luluartistry-backend.onrender.com/api";
 
-const ARTIST_MULTIPLIERS: Record<string, number> = {
-  lulu:  1.00,  // full price
-  sarah: 0.90,  // 10% less
-  maya:  0.85,  // 15% less
-};
-
-function getPrice(service: string, artist: string): number {
-  const base       = BASE_PRICES[service] || 0;
-  const multiplier = ARTIST_MULTIPLIERS[artist] || 1;
-  return Math.round(base * multiplier);
+interface ServicePricing {
+  artistType: string;
+  price: number;
 }
 
-function formatPrice(n: number) {
-  return `₦${n.toLocaleString("en-NG")}`;
+interface Service {
+  _id: string;
+  name: string;
+  category: string;
+  description: string;
+  duration: number;
+  pricing: ServicePricing[];
 }
 
-// ---------------------------------------------------------------------------
-const AppointmentPageContent = () => {
+const ARTIST_LABELS: Record<string, string> = {
+  lulu:   "Lulu (Lead Artist)",
+  senior: "Senior Artist",
+  artist: "Artist",
+};
+
+const TIME_SLOTS = [
+  "08:00", "09:00", "10:00", "11:00", "12:00",
+  "13:00", "14:00", "15:00", "16:00", "17:00",
+];
+
+export interface BookingDraft {
+  serviceId: string;
+  serviceName: string;
+  serviceDescription: string;
+  serviceDuration: number;
+  artistType: string;
+  artistName: string;
+  location: string;
+  appointmentDate: string;
+  timeSlot: string;
+  timeSlotEnd: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  notes: string;
+  servicePrice: number;
+  depositAmount: number;
+  balanceAmount: number;
+  paymentMethod?: "transfer" | "card";
+  selectedBank?: string;
+}
+
+const DRAFT_KEY = "bookingDraft";
+
+function AppointmentContent() {
   const searchParams = useSearchParams();
-  const router       = useRouter();
+  const router = useRouter();
+  const preselectedServiceId = searchParams.get("serviceId");
+
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
-    service:  "",
-    artist:   "",
-    date:     "",
-    time:     "",
-    location: "",
+    serviceId:       preselectedServiceId || "",
+    artistType:      "",
+    location:        "",
+    appointmentDate: "",
+    timeSlot:        "",
+    firstName:       "",
+    lastName:        "",
+    email:           "",
+    phone:           "",
+    notes:           "",
   });
 
-  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  // Fetch services
+  useEffect(() => {
+    fetch(`${BASE_URL}/services`)
+      .then(res => res.json())
+      .then(data => {
+        const list: Service[] = data?.data || [];
+        const filtered = list.filter(s => s.category !== "training");
+        setServices(filtered);
 
-  // Hydrate service from URL
- useEffect(() => {
-    const service = searchParams.get("service");
-    const date    = searchParams.get("date");
-    const time    = searchParams.get("time");
-
-    // Convert HH:MM (24hr) to "H:MM AM/PM" to match time slot buttons
-    let convertedTime = "";
-    if (time) {
-        const decoded = decodeURIComponent(time);
-        if (decoded.includes("AM") || decoded.includes("PM")) {
-            convertedTime = decoded; // already 12-hour format
-        } else {
-            const [h, m] = decoded.split(":").map(Number);
-            const period = h >= 12 ? "PM" : "AM";
-            const hour12 = h % 12 || 12;
-            convertedTime = `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+        if (preselectedServiceId) {
+          const found = filtered.find(s => s._id === preselectedServiceId);
+          if (found) {
+            setSelectedService(found);
+            setFormData(p => ({ ...p, serviceId: found._id }));
+          }
         }
+        setLoadingServices(false);
+      })
+      .catch(() => setLoadingServices(false));
+  }, [preselectedServiceId]);
+
+  // Auto-fill logged-in user's info
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(`${BASE_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => {
+        const u = data?.data;
+        if (!u) return;
+        setFormData(p => ({
+          ...p,
+          firstName: u.firstName || p.firstName,
+          lastName:  u.lastName  || p.lastName,
+          email:     u.email     || p.email,
+          phone:     u.phone     || p.phone,
+        }));
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (formData.serviceId && services.length > 0) {
+      const found = services.find(s => s._id === formData.serviceId);
+      setSelectedService(found || null);
+      setFormData(p => ({ ...p, artistType: "" }));
+    } else if (!formData.serviceId) {
+      setSelectedService(null);
     }
+  }, [formData.serviceId, services]);
 
-    setFormData(prev => ({
-        ...prev,
-        ...(service       ? { service: decodeURIComponent(service) } : {}),
-        ...(date          ? { date }                                  : {}),
-        ...(convertedTime ? { time: convertedTime }                   : {}),
-    }));
-
-    if (date) setAvailableTimes(timeSlots);
-}, [searchParams]);
-
-  const artists = [
-    { id: "lulu",  name: "Lulu" },
-    { id: "sarah", name: "Sarah Johnson" },
-    { id: "maya",  name: "Maya Williams" },
-  ];
-
-  const locations = [
-    { id: "calabar",       name: "Calabar Studio" },
-    { id: "port-harcourt", name: "Port Harcourt Studio" },
-  ];
-
-  const timeSlots = [
-    "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
-    "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM",
-  ];
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (field === "date") setAvailableTimes(timeSlots);
+  const getPrice = () => {
+    if (!selectedService || !formData.artistType) return 0;
+    const pricing = selectedService.pricing.find(p => p.artistType === formData.artistType);
+    return pricing?.price || 0;
   };
 
-  // Derived pricing
-  const servicePrice  = getPrice(formData.service, formData.artist);
-  const depositAmount = Math.round(servicePrice * 0.5);
-  const balanceAmount = servicePrice - depositAmount;
+  const getDepositAmount = () => Math.ceil(getPrice() * 0.5);
+  const getBalanceAmount = () => getPrice() - getDepositAmount();
 
-  const handleNext = () => {
-    if (!formData.artist || !formData.date || !formData.time || !formData.location) {
+  const formatPrice = (p: number) => `₦${p.toLocaleString("en-NG")}`;
+
+  const formatDuration = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return `${m} minutes`;
+    if (m === 0) return `${h} hour${h > 1 ? "s" : ""}`;
+    return `${h} hour${h > 1 ? "s" : ""} ${m} minutes`;
+  };
+
+  const getEndTime = (startTime: string, durationMins: number) => {
+    const [h, m] = startTime.split(":").map(Number);
+    const total = h * 60 + m + durationMins;
+    const endH = Math.floor(total / 60) % 24;
+    const endM = total % 60;
+    return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.serviceId || !formData.artistType || !formData.location ||
+        !formData.appointmentDate || !formData.timeSlot ||
+        !formData.firstName || !formData.lastName ||
+        !formData.email || !formData.phone) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    const params = new URLSearchParams({
-      service:  formData.service,
-      artist:   formData.artist,
-      date:     formData.date,
-      time:     formData.time,
-      location: formData.location,
-      price:    servicePrice.toString(),
-    });
+    const price = getPrice();
+    if (!price) {
+      toast.error("Could not determine service price");
+      return;
+    }
 
-    router.push(`/book-session/payment?${params.toString()}`);
+    setSubmitting(true);
+
+    const draft: BookingDraft = {
+      serviceId:           formData.serviceId,
+      serviceName:         selectedService?.name || "",
+      serviceDescription:  selectedService?.description || "",
+      serviceDuration:     selectedService?.duration || 60,
+      artistType:          formData.artistType,
+      artistName:          ARTIST_LABELS[formData.artistType] || formData.artistType,
+      location:            formData.location,
+      appointmentDate:     formData.appointmentDate,
+      timeSlot:            formData.timeSlot,
+      timeSlotEnd:         getEndTime(formData.timeSlot, selectedService?.duration || 60),
+      firstName:           formData.firstName,
+      lastName:            formData.lastName,
+      email:               formData.email,
+      phone:               formData.phone,
+      notes:               formData.notes,
+      servicePrice:        price,
+      depositAmount:       getDepositAmount(),
+      balanceAmount:       getBalanceAmount(),
+    };
+
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    router.push("/book-session/payment");
   };
 
+  const inputClass = "w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm bg-white";
+  const labelClass = "block text-sm font-semibold text-gray-700 mb-1.5";
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 sm:px-8 py-8">
-          <Link
-            href="/book-session"
-            className="flex items-center gap-2 text-primary-gold hover:text-yellow-500 mb-4"
-          >
-            <ArrowLeft size={20} />
-            <span>Back</span>
-          </Link>
-          <h1 className="text-3xl md:text-4xl font-bold text-dark-gray mb-2">
-            Book a Session — Lulu's Academy
-          </h1>
-          <p className="text-lg text-gray-600">Book Your Appointment.</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 py-12">
+        <div className="text-center mb-10">
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">Book Your Appointment</h1>
+          <p className="text-gray-500">Fill in the details below to schedule your session</p>
         </div>
-      </div>
 
-      <div className="max-w-4xl mx-auto px-6 sm:px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-          {/* Booking Form */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl shadow-lg p-8">
-              <h2 className="text-2xl font-bold text-dark-gray mb-6">Appointment Details</h2>
+            <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-6">
 
-              <div className="space-y-6">
+              <h2 className="text-xl font-bold text-gray-800 border-b border-gray-100 pb-4">
+                Appointment Details
+              </h2>
 
-                {/* Service — read only */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Service</label>
-                  <input
-                    type="text"
-                    value={formData.service}
-                    readOnly
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                  />
-                </div>
-
-                {/* Artist */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Artist *</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <select
-                      value={formData.artist}
-                      onChange={(e) => handleInputChange("artist", e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-                    >
-                      <option value="">Select an artist</option>
-                      {artists.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
+              {/* Service — name only, no duration in the label */}
+              <div>
+                <label className={labelClass}>Service *</label>
+                {loadingServices ? (
+                  <div className="flex items-center gap-2 px-4 py-3 border border-gray-200 rounded-lg text-sm text-gray-400 bg-white">
+                    <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                    Loading services...
                   </div>
-                </div>
-
-                {/* Price breakdown — shows after artist selected */}
-                {formData.artist && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 space-y-2">
-                    <p className="text-sm font-semibold text-gray-700 mb-1">Pricing</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Service Price</span>
-                      <span className="font-bold text-gray-800">{formatPrice(servicePrice)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm border-t border-yellow-200 pt-2">
-                      <span className="text-gray-500">Deposit Required (50%)</span>
-                      <span className="font-bold text-yellow-500">{formatPrice(depositAmount)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Balance (pay on the day)</span>
-                      <span className="text-gray-500">{formatPrice(balanceAmount)}</span>
-                    </div>
-                  </div>
+                ) : (
+                  <select value={formData.serviceId}
+                    onChange={e => setFormData(p => ({ ...p, serviceId: e.target.value }))}
+                    className={inputClass}>
+                    <option value="">Select a service</option>
+                    {services.map(s => (
+                      <option key={s._id} value={s._id}>{s.name}</option>
+                    ))}
+                  </select>
                 )}
+              </div>
 
-                {/* Date */}
+              {/* Duration — its own read-only box */}
+              {selectedService && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => handleInputChange("date", e.target.value)}
-                      min={new Date().toISOString().split("T")[0]}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-                    />
+                  <label className={labelClass}>Duration</label>
+                  <input type="text" readOnly
+                    value={formatDuration(selectedService.duration)}
+                    className={`${inputClass} bg-gray-50 text-gray-500 cursor-not-allowed`} />
+                </div>
+              )}
+
+              {/* Artist — native dropdown, options only show on click */}
+              {selectedService && selectedService.pricing?.length > 0 && (
+                <div>
+                  <label className={labelClass}>Artist *</label>
+                  <select value={formData.artistType}
+                    onChange={e => setFormData(p => ({ ...p, artistType: e.target.value }))}
+                    className={inputClass}>
+                    <option value="">Select artist</option>
+                    {selectedService.pricing.map(p => (
+                      <option key={p.artistType} value={p.artistType}>
+                        {ARTIST_LABELS[p.artistType] || p.artistType} — {formatPrice(p.price)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {getPrice() > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm space-y-2">
+                  <p className="font-semibold text-gray-700 mb-2">Pricing Summary</p>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Service Price</span>
+                    <span className="font-semibold">{formatPrice(getPrice())}</span>
+                  </div>
+                  <div className="flex justify-between text-yellow-700 font-bold border-t border-yellow-200 pt-2">
+                    <span>Deposit Required (50%)</span>
+                    <span>{formatPrice(getDepositAmount())}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Balance (pay on the day)</span>
+                    <span>{formatPrice(getBalanceAmount())}</span>
                   </div>
                 </div>
+              )}
 
-                {/* Time — shown after date selected */}
-                {formData.date && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Date *</label>
+                  <input type="date" value={formData.appointmentDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={e => setFormData(p => ({ ...p, appointmentDate: e.target.value }))}
+                    className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Time *</label>
+                  <select value={formData.timeSlot}
+                    onChange={e => setFormData(p => ({ ...p, timeSlot: e.target.value }))}
+                    className={inputClass}>
+                    <option value="">Select time</option>
+                    {TIME_SLOTS.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClass}>Location *</label>
+                <select value={formData.location}
+                  onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
+                  className={inputClass}>
+                  <option value="">Select location</option>
+                  <option value="calabar">Calabar Studio</option>
+                  <option value="home service">Home Service</option>
+                </select>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <h3 className="text-base font-bold text-gray-800 mb-4">Your Information</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Time *</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {availableTimes.map((time) => (
-                        <button
-                          key={time}
-                          onClick={() => handleInputChange("time", time)}
-                          className={`p-3 border rounded-lg text-center transition-all duration-200 ${
-                            formData.time === time
-                              ? "border-primary-gold bg-primary-gold text-black font-semibold"
-                              : "border-gray-300 hover:border-primary-gold hover:bg-primary-gold/10"
-                          }`}
-                        >
-                          {time}
-                        </button>
-                      ))}
-                    </div>
+                    <label className={labelClass}>First Name *</label>
+                    <input type="text" value={formData.firstName} placeholder="First name"
+                      onChange={e => setFormData(p => ({ ...p, firstName: e.target.value }))}
+                      className={inputClass} />
                   </div>
-                )}
-
-                {/* Location */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location *</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <select
-                      value={formData.location}
-                      onChange={(e) => handleInputChange("location", e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
-                    >
-                      <option value="">Select location</option>
-                      {locations.map((loc) => (
-                        <option key={loc.id} value={loc.id}>{loc.name}</option>
-                      ))}
-                    </select>
+                  <div>
+                    <label className={labelClass}>Last Name *</label>
+                    <input type="text" value={formData.lastName} placeholder="Last name"
+                      onChange={e => setFormData(p => ({ ...p, lastName: e.target.value }))}
+                      className={inputClass} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className={labelClass}>Email *</label>
+                    <input type="email" value={formData.email} placeholder="your@email.com"
+                      onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                      className={inputClass} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Phone *</label>
+                    <input type="tel" value={formData.phone} placeholder="08012345678"
+                      onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))}
+                      className={inputClass} />
                   </div>
                 </div>
               </div>
 
-              {/* Next Button */}
-              <div className="mt-8">
-                <button
-                  onClick={handleNext}
-                  className="w-full bg-primary-gold hover:bg-yellow-500 text-black font-bold py-4 px-6 rounded-lg transition-all duration-300 transform hover:scale-105"
-                >
-                  Next
-                </button>
+              <div>
+                <label className={labelClass}>Special Requests (optional)</label>
+                <textarea value={formData.notes} rows={3}
+                  placeholder="Any special requests or notes..."
+                  onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+                  className={`${inputClass} resize-none`} />
               </div>
-            </div>
+
+              <button type="submit" disabled={submitting}
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 rounded-xl transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                {submitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    Continuing...
+                  </>
+                ) : "Continue to Payment"}
+              </button>
+
+              <p className="text-xs text-gray-400 text-center">
+                By booking, you agree to our booking policy. A 50% deposit is required to confirm your appointment.
+              </p>
+            </form>
           </div>
 
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-gray-50 rounded-2xl p-6 sticky top-8">
-              <h3 className="text-xl font-bold text-dark-gray mb-4">
-                About Lulu — Beauty & Skills
-              </h3>
-              <div className="relative h-48 w-full overflow-hidden rounded-lg mb-4">
-                <Image src={lulu} alt="About Lulu" fill className="object-cover" />
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">About Lulu</h3>
+              <div className="relative w-full h-48 rounded-xl overflow-hidden mb-4">
+                <Image src={lulu} alt="Lulu" fill className="object-cover" />
               </div>
-              <p className="text-gray-600 text-sm leading-relaxed">
-                With over 5 years of experience in the beauty industry, Lulu has mastered the art
-                of lash extensions and beauty enhancement. Her passion for perfection ensures
-                you'll leave feeling confident and beautiful.
+              <p className="text-sm text-gray-600 leading-relaxed">
+                With over 5 years of experience in the beauty industry, Lulu has mastered
+                the art of lash extensions and beauty enhancement. Her passion for perfection
+                ensures you'll leave feeling confident and beautiful.
               </p>
             </div>
-          </div>
 
+            <div className="bg-yellow-500 rounded-2xl p-6 text-black">
+              <h3 className="text-lg font-bold mb-4">Lulu's Beauty Studio</h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <MapPin size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>Shop A51, Calabar Municipal Plaza Marian, Calabar</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone size={16} className="flex-shrink-0" />
+                  <span>07031002094</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail size={16} className="flex-shrink-0" />
+                  <span>lulusartistry321@gmail.com</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="flex-shrink-0" />
+                  <div>
+                    <p>Mon–Fri: 9 AM – 6 PM</p>
+                    <p>Sat: 10 AM – 4 PM</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-base font-bold text-gray-800 mb-3">Booking Policy</h3>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold mt-0.5">•</span>
+                  Appointments require 24-hour advance booking
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold mt-0.5">•</span>
+                  Cancellations must be made at least 48 hours in advance
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold mt-0.5">•</span>
+                  50% deposit required to confirm booking
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-500 font-bold mt-0.5">•</span>
+                  Balance is paid on the day of the appointment
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
-};
+}
 
-const AppointmentPage = () => (
-  <Suspense fallback={<div className="min-h-screen bg-white p-8">Loading booking details...</div>}>
-    <AppointmentPageContent />
-  </Suspense>
-);
-
-export default AppointmentPage;
+export default function AppointmentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <AppointmentContent />
+    </Suspense>
+  );
+}

@@ -12,13 +12,15 @@ import {
 	Palette,
 	Menu,
 	X,
-	ShoppingCart
+	ShoppingCart,
+	Scissors
 } from "lucide-react";
 import { useState } from "react";
 
 const menuItems = [
 	{ href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
 	{ href: "/admin/bookings", label: "Bookings", icon: Calendar },
+	{ href: "/admin/services", label: "Services", icon: Scissors },
 	{ href: "/admin/clients", label: "Clients", icon: Users },
 	{ href: "/admin/products", label: "Products", icon: ShoppingBag },
 	{ href: "/admin/orders", label: "Orders", icon: ShoppingCart },
@@ -108,4 +110,3 @@ export default function AdminSidebar() {
 		</>
 	);
 }
-

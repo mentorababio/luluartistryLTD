@@ -1,42 +1,13 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CreditCard, CheckCircle, Shield, Copy } from "lucide-react";
 import toast from "react-hot-toast";
+import type { BookingDraft } from "../appointment/page";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://luluartistry-backend.onrender.com/api";
-
-// ---------------------------------------------------------------------------
-// Service price map
-// ---------------------------------------------------------------------------
-const SERVICE_PRICES: Record<string, number> = {
-  "Ombré Powder Brows":                    700000,
-  "Signature Combo Brows":                  80000,
-  "Microshading":                           70000,
-  "Brow Lamination & Tint":                 40000,
-  "Brow Touch-up (All Types)":              60000,
-  "Classic Set":                            20000,
-  "Hybrid Set":                             25000,
-  "Volume Set":                           1200000,
-  " MegaVolume Set":                        40000,
-  " Bottom Lashes":                         10000,
-  " Wispy Add-On":                           8000,
-  " The Aleks Set":                         50000,
-  " Dolly Set":                             66000,
-  " Flirty Fox Eye":                        40000,
-  " The Eb Luxe Set":                       40000,
-  " Private Brow Training":               400000,
-  "Group Brow Training":                  300000,
-  " Private Lash Training":               300000,
-  " Group Lash Training":                 200000,
-  " Private Combo Lash + Brow Training":  650000,
-  " Group Combo Lash + Brow Training":    450000,
-  "Private Brow Lamination & Tint Training": 150000,
-};
+const DRAFT_KEY = "bookingDraft";
 
 interface BankDetails {
   bankName: string;
@@ -44,9 +15,6 @@ interface BankDetails {
   accountName: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 function formatPrice(n: number) {
   return `₦${n.toLocaleString("en-NG")}`;
 }
@@ -56,21 +24,11 @@ function copyToClipboard(text: string, label: string) {
   toast.success(`${label} copied!`);
 }
 
-// ---------------------------------------------------------------------------
-// Page content
-// ---------------------------------------------------------------------------
-const PaymentPageContent = () => {
-  const searchParams = useSearchParams();
+export default function PaymentPage() {
   const router = useRouter();
 
-  const [bookingData, setBookingData] = useState({
-    service: "",
-    artist: "",
-    date: "",
-    time: "",
-    location: "",
-  });
-
+  const [draft, setDraft] = useState<BookingDraft | null>(null);
+  const [loading, setLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "transfer">("transfer");
   const [selectedBank, setSelectedBank] = useState("");
   const [bankDetails, setBankDetails] = useState<BankDetails>({
@@ -79,25 +37,27 @@ const PaymentPageContent = () => {
     accountName: "Lulu's Artistry",
   });
 
-  // Hydrate booking data from URL
+  // Load draft — if missing, the user skipped the form, send them back
   useEffect(() => {
-    setBookingData({
-      service:  searchParams.get("service")  || "",
-      artist:   searchParams.get("artist")   || "",
-      date:     searchParams.get("date")     || "",
-      time:     searchParams.get("time")     || "",
-      location: searchParams.get("location") || "",
-    });
-  }, [searchParams]);
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) {
+      toast.error("Please fill in your appointment details first");
+      router.replace("/book-session/appointment");
+      return;
+    }
+    try {
+      setDraft(JSON.parse(raw));
+    } catch {
+      router.replace("/book-session/appointment");
+      return;
+    }
+    setLoading(false);
+  }, [router]);
 
-  // Fetch live bank details from backend settings
   useEffect(() => {
-    const fetchBankDetails = async () => {
-      try {
-        const res = await fetch(
-          "https://luluartistry-backend.onrender.com/api/settings/public"
-        );
-        const json = await res.json();
+    fetch("https://luluartistry-backend.onrender.com/api/settings/public")
+      .then(res => res.json())
+      .then(json => {
         if (json?.success && json?.data?.bank) {
           setBankDetails({
             bankName:      json.data.bank.bankName,
@@ -105,42 +65,35 @@ const PaymentPageContent = () => {
             accountName:   json.data.bank.accountName,
           });
         }
-      } catch {
-        // Keep hardcoded fallback
-      }
-    };
-    fetchBankDetails();
+      })
+      .catch(() => {});
   }, []);
 
-  const price        = SERVICE_PRICES[bookingData.service] || 25000;
-  const depositAmount = Math.round(price * 0.5);
-
-  // ---------------------------------------------------------------------------
-  // Continue to confirm page
-  // ---------------------------------------------------------------------------
   const handleContinue = () => {
-    if (!paymentMethod) {
-      toast.error("Please select a payment method");
-      return;
-    }
+    if (!draft) return;
+
     if (paymentMethod === "transfer" && !selectedBank) {
       toast.error("Please select your bank");
       return;
     }
 
-    const params = new URLSearchParams({
-      ...bookingData,
-      price:         price.toString(),
-      paymentMethod,
-      selectedBank,
-    });
-
-    router.push(`/book-session/confirm?${params.toString()}`);
+    const updated: BookingDraft = { ...draft, paymentMethod, selectedBank };
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(updated));
+    router.push("/book-session/confirm");
   };
+
+  if (loading || !draft) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  const depositAmount = draft.depositAmount;
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 sm:px-8 py-8">
           <Link
@@ -165,16 +118,15 @@ const PaymentPageContent = () => {
           <h2 className="text-2xl font-bold text-gray-800 mb-1">Payment Options</h2>
           <p className="text-gray-500 mb-6">Select your preferred payment method.</p>
 
-          {/* Payment Summary */}
           <div className="bg-gray-50 rounded-xl p-5 mb-8 space-y-3">
             <h3 className="font-semibold text-gray-800">Payment Summary</h3>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Service</span>
-              <span className="font-medium text-gray-800">{bookingData.service || "—"}</span>
+              <span className="font-medium text-gray-800">{draft.serviceName || "—"}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Full Price</span>
-              <span className="font-medium">{formatPrice(price)}</span>
+              <span className="font-medium">{formatPrice(draft.servicePrice)}</span>
             </div>
             <div className="flex justify-between text-sm border-t border-gray-200 pt-3">
               <span className="text-gray-500">Deposit Required (50%)</span>
@@ -182,62 +134,41 @@ const PaymentPageContent = () => {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Balance (pay on day)</span>
-              <span className="font-medium text-gray-600">{formatPrice(price - depositAmount)}</span>
+              <span className="font-medium text-gray-600">{formatPrice(draft.balanceAmount)}</span>
             </div>
           </div>
 
-          {/* Payment Methods */}
           <div className="space-y-4">
 
-            {/* Card */}
+            {/* Card — not wired up yet */}
             <label
-              className={`flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                paymentMethod === "card"
-                  ? "border-yellow-500 bg-yellow-50"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
+              className="flex items-start p-4 border-2 rounded-xl cursor-not-allowed opacity-50 border-gray-200"
             >
               <input
                 type="radio"
                 name="paymentMethod"
                 value="card"
-                checked={paymentMethod === "card"}
-                onChange={() => setPaymentMethod("card")}
-                className="w-5 h-5 mt-0.5 accent-yellow-500"
+                disabled
+                className="w-5 h-5 mt-0.5"
               />
               <div className="ml-4 flex-1">
                 <div className="flex items-center gap-2">
                   <CreditCard size={18} className="text-gray-500" />
-                  <p className="font-semibold text-gray-800">
-                    Paystack / Flutterwave
-                  </p>
+                  <p className="font-semibold text-gray-800">Card payment</p>
                 </div>
-                <p className="text-sm text-gray-500 mt-0.5">Debit / Credit Card</p>
-                {paymentMethod === "card" && (
-                  <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-700 font-medium">
-                      🔒 You'll be redirected to Paystack's secure payment page.
-                    </p>
-                  </div>
-                )}
+                <p className="text-sm text-gray-500 mt-0.5">Coming soon</p>
               </div>
             </label>
 
             {/* Bank Transfer */}
-            <div
-              className={`border-2 rounded-xl transition-all ${
-                paymentMethod === "transfer"
-                  ? "border-yellow-500 bg-yellow-50"
-                  : "border-gray-200"
-              }`}
-            >
-              <label className="flex items-start p-4 cursor-pointer">
+            <div className="border-2 rounded-xl transition-all border-yellow-500 bg-yellow-50">
+              <div className="flex items-start p-4">
                 <input
                   type="radio"
                   name="paymentMethod"
                   value="transfer"
-                  checked={paymentMethod === "transfer"}
-                  onChange={() => setPaymentMethod("transfer")}
+                  checked
+                  readOnly
                   className="w-5 h-5 mt-0.5 accent-yellow-500"
                 />
                 <div className="ml-4">
@@ -249,91 +180,82 @@ const PaymentPageContent = () => {
                   </div>
                   <p className="text-sm text-gray-500 mt-0.5">Direct bank transfer</p>
                 </div>
-              </label>
+              </div>
 
-              {/* Bank transfer details — shown when selected */}
-              {paymentMethod === "transfer" && (
-                <div className="px-5 pb-5 space-y-3">
-
-                  {/* Bank details cards */}
-                  {[
-                    { label: "Bank Name",      value: bankDetails.bankName },
-                    { label: "Account Number", value: bankDetails.accountNumber },
-                    { label: "Account Name",   value: bankDetails.accountName },
-                  ].map(({ label, value }) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
-                    >
-                      <div>
-                        <p className="text-xs text-gray-500">{label}</p>
-                        <p className="font-semibold text-gray-800">{value}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(value, label)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
-                        <Copy size={15} className="text-gray-500" />
-                      </button>
-                    </div>
-                  ))}
-
-                  {/* Amount to transfer */}
-                  <div className="flex items-center justify-between p-3 bg-yellow-50 border-2 border-yellow-500 rounded-lg">
+              <div className="px-5 pb-5 space-y-3">
+                {[
+                  { label: "Bank Name",      value: bankDetails.bankName },
+                  { label: "Account Number", value: bankDetails.accountNumber },
+                  { label: "Account Name",   value: bankDetails.accountName },
+                ].map(({ label, value }) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
+                  >
                     <div>
-                      <p className="text-xs text-gray-500">Amount to Transfer (Deposit)</p>
-                      <p className="font-bold text-yellow-500 text-lg">
-                        {formatPrice(depositAmount)}
-                      </p>
+                      <p className="text-xs text-gray-500">{label}</p>
+                      <p className="font-semibold text-gray-800">{value}</p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(depositAmount.toString(), "Amount")}
-                      className="p-2 hover:bg-yellow-100 rounded-lg transition-colors"
+                      onClick={() => copyToClipboard(value, label)}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                       <Copy size={15} className="text-gray-500" />
                     </button>
                   </div>
+                ))}
 
-                  {/* Select bank */}
+                <div className="flex items-center justify-between p-3 bg-yellow-50 border-2 border-yellow-500 rounded-lg">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Select your bank *
-                    </label>
-                    <select
-                      value={selectedBank}
-                      onChange={(e) => setSelectedBank(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
-                    >
-                      <option value="">Select your bank</option>
-                      <option value="gtb">GTBank</option>
-                      <option value="access">Access Bank</option>
-                      <option value="uba">UBA</option>
-                      <option value="zenith">Zenith Bank</option>
-                      <option value="firstbank">First Bank</option>
-                      <option value="moniepoint">Moniepoint</option>
-                      <option value="opay">OPay</option>
-                      <option value="palmpay">PalmPay</option>
-                      <option value="kuda">Kuda Bank</option>
-                      <option value="other">Other</option>
-                    </select>
+                    <p className="text-xs text-gray-500">Amount to Transfer (Deposit)</p>
+                    <p className="font-bold text-yellow-500 text-lg">
+                      {formatPrice(depositAmount)}
+                    </p>
                   </div>
-
-                  <p className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg p-3">
-                    💡 Transfer the deposit amount above, then on the next page you'll enter your
-                    transfer reference number so we can confirm your payment.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(depositAmount.toString(), "Amount")}
+                    className="p-2 hover:bg-yellow-100 rounded-lg transition-colors"
+                  >
+                    <Copy size={15} className="text-gray-500" />
+                  </button>
                 </div>
-              )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select your bank *
+                  </label>
+                  <select
+                    value={selectedBank}
+                    onChange={(e) => setSelectedBank(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">Select your bank</option>
+                    <option value="gtb">GTBank</option>
+                    <option value="access">Access Bank</option>
+                    <option value="uba">UBA</option>
+                    <option value="zenith">Zenith Bank</option>
+                    <option value="firstbank">First Bank</option>
+                    <option value="moniepoint">Moniepoint</option>
+                    <option value="opay">OPay</option>
+                    <option value="palmpay">PalmPay</option>
+                    <option value="kuda">Kuda Bank</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <p className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg p-3">
+                  💡 Transfer the deposit amount above, then on the next page you'll enter your
+                  transfer reference number so we can confirm your payment.
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Security */}
           <div className="flex flex-wrap gap-4 mt-6 pt-6 border-t border-gray-200">
             {[
               { icon: <CheckCircle size={15} className="text-green-500" />, label: "SSL Secure" },
-              { icon: <Shield size={15} className="text-green-500" />,     label: "Verified by Paystack" },
               { icon: <Shield size={15} className="text-green-500" />,     label: "Privacy Protected" },
             ].map(({ icon, label }) => (
               <div key={label} className="flex items-center gap-1.5 text-sm text-gray-500">
@@ -343,10 +265,9 @@ const PaymentPageContent = () => {
             ))}
           </div>
 
-          {/* Actions */}
           <div className="flex gap-4 mt-8 pt-6 border-t border-gray-200">
             <Link
-              href={`/book-session/appointment?service=${encodeURIComponent(bookingData.service)}`}
+              href="/book-session/appointment"
               className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-4 px-6 rounded-lg transition-colors text-center"
             >
               ← Back
@@ -362,18 +283,4 @@ const PaymentPageContent = () => {
       </div>
     </div>
   );
-};
-
-const PaymentPage = () => (
-  <Suspense
-    fallback={
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full" />
-      </div>
-    }
-  >
-    <PaymentPageContent />
-  </Suspense>
-);
-
-export default PaymentPage;
+}

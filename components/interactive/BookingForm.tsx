@@ -1,284 +1,351 @@
 "use client";
 
-import { useState } from "react";
-import { Calendar, Clock, User, Phone, Mail, CheckCircle, Loader } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
-import { apiClient } from "@/lib/api/client";
 
-interface BookingData {
-  name: string;
-  email: string;
-  phone: string;
-  service: string;
-  date: string;
-  time: string;
-  message: string;
+const BASE_URL = "https://luluartistry-backend.onrender.com/api";
+
+interface ServicePricing {
+  artistType: string;
+  price: number;
 }
 
-const BookingForm = () => {
-  const [formData, setFormData] = useState<BookingData>({
-    name: "",
-    email: "",
-    phone: "",
-    service: "",
-    date: "",
-    time: "",
-    message: ""
+interface Service {
+  _id: string;
+  name: string;
+  category: string;
+  description: string;
+  duration: number;
+  pricing: ServicePricing[];
+}
+
+const ARTIST_LABELS: Record<string, string> = {
+  lulu:   "Lulu (Lead Artist)",
+  senior: "Senior Artist",
+  artist: "Artist",
+};
+
+const TIME_SLOTS = [
+  "08:00", "09:00", "10:00", "11:00", "12:00",
+  "13:00", "14:00", "15:00", "16:00", "17:00",
+];
+
+export default function BookingForm() {
+  const searchParams = useSearchParams();
+  const preselectedServiceId = searchParams.get("serviceId");
+
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState({
+    serviceId:       preselectedServiceId || "",
+    artistType:      "",
+    location:        "",
+    appointmentDate: "",
+    timeSlot:        "",
+    firstName:       "",
+    lastName:        "",
+    email:           "",
+    phone:           "",
+    notes:           "",
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const services = [
-    "Lash Extensions",
-    "Nail Art & Design",
-    "Brow Shaping & Tinting",
-    "Tattoo Design",
-    "Makeup Services",
-    "Training Session",
-    "Consultation"
-  ];
+  // Fetch real services from backend (no training)
+  useEffect(() => {
+    fetch(`${BASE_URL}/services`)
+      .then(res => res.json())
+      .then(data => {
+        const list: Service[] = data?.data || [];
+        // Exclude training category
+        const filtered = list.filter(s => s.category !== "training");
+        setServices(filtered);
 
-  const timeSlots = [
-    "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM",
-    "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"
-  ];
+        // Pre-select if serviceId is in URL
+        if (preselectedServiceId) {
+          const found = filtered.find(s => s._id === preselectedServiceId);
+          if (found) setSelectedService(found);
+        }
+        setLoadingServices(false);
+      })
+      .catch(() => setLoadingServices(false));
+  }, [preselectedServiceId]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  // Update selectedService when serviceId changes
+  useEffect(() => {
+    if (formData.serviceId) {
+      const found = services.find(s => s._id === formData.serviceId);
+      setSelectedService(found || null);
+      setFormData(prev => ({ ...prev, artistType: "" })); // reset artist on service change
+    } else {
+      setSelectedService(null);
+    }
+  }, [formData.serviceId, services]);
+
+  const getPrice = () => {
+    if (!selectedService || !formData.artistType) return null;
+    const pricing = selectedService.pricing.find(p => p.artistType === formData.artistType);
+    return pricing?.price || null;
+  };
+
+  const getDepositAmount = () => {
+    const price = getPrice();
+    return price ? Math.ceil(price * 0.5) : null;
+  };
+
+  const formatPrice = (p: number) => `₦${p.toLocaleString("en-NG")}`;
+
+  const getEndTime = (startTime: string, durationMins: number) => {
+    const [h, m] = startTime.split(":").map(Number);
+    const total = h * 60 + m + durationMins;
+    const endH = Math.floor(total / 60) % 24;
+    const endM = total % 60;
+    return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name || !formData.email || !formData.phone || !formData.service || !formData.date || !formData.time) {
-      toast.error('Please fill in all required fields');
+
+    if (!formData.serviceId || !formData.artistType || !formData.location ||
+        !formData.appointmentDate || !formData.timeSlot ||
+        !formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
+      toast.error("Please fill in all required fields");
       return;
     }
 
-    setIsSubmitting(true);
+    const price = getPrice();
+    const deposit = getDepositAmount();
+    if (!price || !deposit) {
+      toast.error("Could not determine service price");
+      return;
+    }
 
+    setSubmitting(true);
     try {
-      // Parse name into first and last
-      const nameParts = formData.name.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      const token = localStorage.getItem("token");
+      const endTime = getEndTime(formData.timeSlot, selectedService?.duration || 60);
 
-      // Parse time slot
-      const timeSlot = {
-        start: formData.time,
-        end: formData.time // API will handle calculating end time based on service
-      };
-
-      // Call booking endpoint
-      const bookingPayload = {
-        service: formData.service,
-        artist: {
-          type: 'lulu', // Default artist type
-          name: 'Lulu'
+      const payload = {
+        service: formData.serviceId,
+        serviceSnapshot: {
+          name: selectedService?.name,
+          description: selectedService?.description,
+          duration: selectedService?.duration,
         },
-        location: 'port-harcourt', // Default location
-        appointmentDate: formData.date,
-        timeSlot,
-        notes: formData.message || ''
+        artist: {
+          type: formData.artistType,
+          name: formData.artistType === "lulu" ? "Lulu" : formData.artistType,
+        },
+        location: formData.location,
+        appointmentDate: formData.appointmentDate,
+        timeSlot: {
+          start: formData.timeSlot,
+          end: endTime,
+        },
+        customerInfo: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+        },
+        pricing: {
+          servicePrice: price,
+          depositAmount: deposit,
+          balanceAmount: price - deposit,
+        },
+        notes: {
+          customerNotes: formData.notes,
+        },
       };
 
-      const response = await apiClient.post<any>('/bookings', bookingPayload);
+      const res = await fetch(`${BASE_URL}/bookings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
 
-      if (!response.data) {
-        throw new Error('Failed to create booking');
-      }
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || json.message || "Failed to create booking");
 
-      toast.success('Booking confirmed! We will contact you soon.');
-      setIsSubmitted(true);
-      
-      // Reset form after 3 seconds
-      setTimeout(() => {
-        setIsSubmitted(false);
-        setFormData({
-          name: "",
-          email: "",
-          phone: "",
-          service: "",
-          date: "",
-          time: "",
-          message: ""
-        });
-      }, 3000);
-    } catch (error: any) {
-      console.error('Booking failed:', error);
-      toast.error(error?.message || 'Failed to create booking. Please try again.');
+      toast.success("Booking created! You'll receive a confirmation shortly.");
+
+      // Reset form
+      setFormData({
+        serviceId: "", artistType: "", location: "",
+        appointmentDate: "", timeSlot: "",
+        firstName: "", lastName: "", email: "", phone: "", notes: "",
+      });
+      setSelectedService(null);
+
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create booking. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  if (isSubmitted) {
-    return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
-        <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-green-800 mb-2">Booking Confirmed!</h3>
-        <p className="text-green-600">We&apos;ll contact you soon to confirm your appointment details.</p>
-      </div>
-    );
-  }
+  const inputClass = "w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm";
+  const labelClass = "block text-sm font-semibold text-gray-700 mb-1";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-            <User size={16} className="inline mr-2" />
-            Full Name *
-          </label>
-          <input
-            type="text"
-            id="name"
-            name="name"
-            value={formData.name}
-            onChange={handleInputChange}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent transition-colors"
-            placeholder="Enter your full name"
-          />
-        </div>
 
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-            <Mail size={16} className="inline mr-2" />
-            Email Address *
-          </label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleInputChange}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent transition-colors"
-            placeholder="Enter your email"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-            <Phone size={16} className="inline mr-2" />
-            Phone Number *
-          </label>
-          <input
-            type="tel"
-            id="phone"
-            name="phone"
-            value={formData.phone}
-            onChange={handleInputChange}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent transition-colors"
-            placeholder="Enter your phone number"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="service" className="block text-sm font-medium text-gray-700 mb-2">
-            Service *
-          </label>
+      {/* Service Select */}
+      <div>
+        <label className={labelClass}>Service *</label>
+        {loadingServices ? (
+          <div className="flex items-center gap-2 px-4 py-3 border border-gray-200 rounded-lg text-sm text-gray-400">
+            <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+            Loading services...
+          </div>
+        ) : (
           <select
-            id="service"
-            name="service"
-            value={formData.service}
-            onChange={handleInputChange}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent transition-colors"
+            value={formData.serviceId}
+            onChange={e => setFormData(p => ({ ...p, serviceId: e.target.value }))}
+            className={inputClass}
           >
             <option value="">Select a service</option>
-            {services.map((service) => (
-              <option key={service} value={service}>
-                {service}
-              </option>
+            {services.map(s => (
+              <option key={s._id} value={s._id}>{s.name}</option>
             ))}
           </select>
-        </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Artist Type — only show after service is selected */}
+      {selectedService && selectedService.pricing?.length > 0 && (
         <div>
-          <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
-            <Calendar size={16} className="inline mr-2" />
-            Preferred Date *
-          </label>
-          <input
-            type="date"
-            id="date"
-            name="date"
-            value={formData.date}
-            onChange={handleInputChange}
-            required
-            min={new Date().toISOString().split('T')[0]}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent transition-colors"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-2">
-            <Clock size={16} className="inline mr-2" />
-            Preferred Time *
-          </label>
-          <select
-            id="time"
-            name="time"
-            value={formData.time}
-            onChange={handleInputChange}
-            required
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent transition-colors"
-          >
-            <option value="">Select a time</option>
-            {timeSlots.map((time) => (
-              <option key={time} value={time}>
-                {time}
-              </option>
+          <label className={labelClass}>Artist *</label>
+          <div className="space-y-2">
+            {selectedService.pricing.map(p => (
+              <label key={p.artistType}
+                className={`flex items-center justify-between p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                  formData.artistType === p.artistType
+                    ? "border-yellow-500 bg-yellow-50"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}>
+                <div className="flex items-center gap-3">
+                  <input type="radio" name="artistType" value={p.artistType}
+                    checked={formData.artistType === p.artistType}
+                    onChange={e => setFormData(prev => ({ ...prev, artistType: e.target.value }))}
+                    className="w-4 h-4 text-yellow-500" />
+                  <span className="text-sm font-medium text-gray-700">{ARTIST_LABELS[p.artistType] || p.artistType}</span>
+                </div>
+                <span className="text-sm font-bold text-yellow-600">{formatPrice(p.price)}</span>
+              </label>
             ))}
-          </select>
+          </div>
         </div>
-      </div>
+      )}
 
+      {/* Price Summary */}
+      {getPrice() && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm">
+          <div className="flex justify-between mb-1">
+            <span className="text-gray-600">Service Price</span>
+            <span className="font-semibold">{formatPrice(getPrice()!)}</span>
+          </div>
+          <div className="flex justify-between font-bold text-yellow-700 border-t border-yellow-200 pt-2 mt-2">
+            <span>Deposit Required (50%)</span>
+            <span>{formatPrice(getDepositAmount()!)}</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">Balance paid on the day of appointment</p>
+        </div>
+      )}
+
+      {/* Location */}
       <div>
-        <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-          Additional Notes
-        </label>
-        <textarea
-          id="message"
-          name="message"
-          value={formData.message}
-          onChange={handleInputChange}
-          rows={4}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-gold focus:border-transparent transition-colors resize-none"
-          placeholder="Any specific requirements or questions..."
-        />
+        <label className={labelClass}>Location *</label>
+        <select value={formData.location}
+          onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
+          className={inputClass}>
+          <option value="">Select location</option>
+          <option value="calabar">Calabar</option>
+          <option value="port-harcourt">Port Harcourt</option>
+        </select>
       </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full bg-primary-gold hover:bg-primary-gray disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
-      >
-        {isSubmitting ? (
+      {/* Date & Time */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className={labelClass}>Preferred Date *</label>
+          <input type="date" value={formData.appointmentDate}
+            min={new Date().toISOString().split("T")[0]}
+            onChange={e => setFormData(p => ({ ...p, appointmentDate: e.target.value }))}
+            className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Preferred Time *</label>
+          <select value={formData.timeSlot}
+            onChange={e => setFormData(p => ({ ...p, timeSlot: e.target.value }))}
+            className={inputClass}>
+            <option value="">Select time</option>
+            {TIME_SLOTS.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Customer Info */}
+      <div className="border-t border-gray-100 pt-4">
+        <h3 className="text-base font-semibold text-gray-800 mb-4">Your Information</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>First Name *</label>
+            <input type="text" value={formData.firstName} placeholder="First name"
+              onChange={e => setFormData(p => ({ ...p, firstName: e.target.value }))}
+              className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Last Name *</label>
+            <input type="text" value={formData.lastName} placeholder="Last name"
+              onChange={e => setFormData(p => ({ ...p, lastName: e.target.value }))}
+              className={inputClass} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className={labelClass}>Email *</label>
+            <input type="email" value={formData.email} placeholder="your@email.com"
+              onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+              className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Phone *</label>
+            <input type="tel" value={formData.phone} placeholder="08012345678"
+              onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))}
+              className={inputClass} />
+          </div>
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <label className={labelClass}>Special Requests (optional)</label>
+        <textarea value={formData.notes} rows={3} placeholder="Any special requests or notes..."
+          onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+          className={`${inputClass} resize-none`} />
+      </div>
+
+      <button type="submit" disabled={submitting}
+        className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 rounded-xl transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+        {submitting ? (
           <>
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
             Booking...
           </>
-        ) : (
-          <>
-            <Calendar size={20} />
-            Book Appointment
-          </>
-        )}
+        ) : "Book Appointment"}
       </button>
+
+      <p className="text-xs text-gray-500 text-center">
+        By booking, you agree to our booking policy. A 50% deposit is required to confirm your appointment.
+      </p>
     </form>
   );
-};
-
-export default BookingForm;
+}

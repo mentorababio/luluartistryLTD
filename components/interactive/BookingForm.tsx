@@ -31,7 +31,8 @@ const TIME_SLOTS = [
   "13:00", "14:00", "15:00", "16:00", "17:00",
 ];
 
-export default function BookingForm() {
+// Separate component that uses useSearchParams
+function BookingFormContent() {
   const searchParams = useSearchParams();
   const preselectedServiceId = searchParams.get("serviceId");
 
@@ -349,3 +350,5 @@ export default function BookingForm() {
     </form>
   );
 }
+
+export default BookingFormContent;

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import BookingForm from "@/components/interactive/BookingForm";
 import MapSection from "@/components/common/MapSection";
 
@@ -17,7 +18,9 @@ const BookingPage = () => {
           </div>
           
           <div className="bg-white rounded-lg shadow-lg p-8">
-            <BookingForm />
+            <Suspense fallback={<div className="flex justify-center py-8"><div className="w-6 h-6 border-3 border-yellow-400 border-t-transparent rounded-full animate-spin" /></div>}>
+              <BookingForm />
+            </Suspense>
           </div>
         </div>
       </div>

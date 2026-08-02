@@ -14,10 +14,10 @@ import TestimonialCarousel from "@/components/home/TestimonialCarousel";
 import Igone from "@/assets/images/IG1.png";
 import Igtwo from "@/assets/images/IG2.png";
 import Igthree from "@/assets/images/IG3.png";
-import Instagram1 from "@/assets/images/testimony2.png";
-import Instagram2 from "@/assets/images/testimony1.png";
-import Instagram3 from "@/assets/images/testimony3.png";
-import Instagram4 from "@/assets/images/IG4.png";
+import Instagram1 from "@/assets/images/testimony3.png";
+import Instagram2 from "@/assets/images/lash.jpg";
+import Instagram3 from "@/assets/images/testimony5.png";
+import Instagram4 from "@/assets/images/testimony4.png";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||

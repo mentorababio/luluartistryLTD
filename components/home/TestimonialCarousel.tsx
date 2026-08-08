@@ -7,12 +7,12 @@ import Igone from "@/assets/images/IG1.png";
 import Igtwo from "@/assets/images/IG2.png";
 import Igthree from "@/assets/images/IG3.png";
 import Igfour from "@/assets/images/IG4.png";
-import TestimonialOne from "@/assets/images/testimony1.png";
-import TestimonialTwo from "@/assets/images/testimony2.png";
-import TestimonialThree from "@/assets/images/testimony3.png";
-import TestimonialFour from "@/assets/images/testimony4.png";
-import TestimonialFive from "@/assets/images/testimony5.png";
-import TestimonialSix from "@/assets/images/testimony6.png";
+import TestimonialOne from "@/assets/images/job1.jpeg";
+import TestimonialTwo from "@/assets/images/job2.jpeg";
+import TestimonialThree from "@/assets/images/job3.jpg";
+import TestimonialFour from "@/assets/images/job4.jpg";
+import TestimonialFive from "@/assets/images/job5.jpg";
+import TestimonialSix from "@/assets/images/job6.jpg";
 
 interface Testimonial {
   id: number;

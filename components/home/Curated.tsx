@@ -11,15 +11,15 @@ const Curated = () => {
 			link: "/shop/lashes",
 		},
 		{
-			title: "Spa",
+			title: "Lash Signature",
 			image: nails,
-			desc: "Press-on perfection — for glam that's quick and flawless.",
+			desc: "Define, enhance, and elevate your look with signature lashes.",
 			link: "/shop/spa",
 		},
 		{
-			title: "Tattoos",
+			title: "Tool Edits",
 			image: tatoo,
-			desc: "Long-lasting, stylish body art to express your unique identity.",
+			desc: "Shape, refine, and perfect your look with essential beauty tools.",
 			link: "/shop/tattoo",
 		},
 		{

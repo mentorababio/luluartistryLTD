@@ -5,10 +5,10 @@ import logo from "./icons/logo.png";
 import search from "./icons/search.png";
 import hero from "./images/hero.jpg";
 
-import brows from "./images/brows.jpg";
-import lash from "./images/lash.jpg";
-import nails from "./images/nails.jpg";
-import tatoo from "./images/tatoos.jpg";
+import brows from "./images/curated3.png";
+import lash from "./images/curated2.png";
+import nails from "./images/curated4.png";
+import tatoo from "./images/curated1.png";
 
 import pack from "./icons/packaging.png";
 import payment from "./icons/payment.png";

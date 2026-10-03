@@ -11,7 +11,7 @@ import {
   CheckCircle,
   Shield,
   Copy,
-  Loader
+  Loader,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { apiClient, endpoints } from "@/lib/api/client";
@@ -60,10 +60,10 @@ export default function CheckoutPage() {
     streetAddress: "",
     city: "",
     state: "",
-    zipCode: ""
+    zipCode: "",
   });
 
-  const [deliveryMethod, setDeliveryMethod] = useState("pack");
+  const [deliveryMethod, setDeliveryMethod] = useState("park");
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [rememberInfo, setRememberInfo] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
@@ -168,24 +168,21 @@ export default function CheckoutPage() {
   const formatPrice = (price: number) =>
     `₦${price.toLocaleString("en-NG")}`;
 
-  const getDeliveryDate = () => {
-    const today = new Date();
+  // Delivery time based on selected delivery method
+  const getDeliveryTime = (method: string) => {
+    switch (method) {
+      case "park":
+        return "1–3 working days";
 
-    const days =
-      deliveryMethod === "standard"
-        ? 3
-        : deliveryMethod === "express"
-        ? 1
-        : 0;
+      case "gig":
+        return "3–5 working days";
 
-    const d = new Date(today);
-    d.setDate(today.getDate() + days);
+      case "intentional":
+        return "5–7 working days";
 
-    return d.toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "short",
-      day: "numeric"
-    });
+      default:
+        return "";
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -219,7 +216,7 @@ export default function CheckoutPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            reference: transferReference
+            reference: transferReference,
           }),
         }
       );
@@ -233,11 +230,10 @@ export default function CheckoutPage() {
       );
 
       router.push("/order-success");
-
     } catch (err: any) {
       toast.error(
         err?.message ||
-        "Failed to submit reference. Please try again."
+          "Failed to submit reference. Please try again."
       );
     } finally {
       setSubmittingRef(false);
@@ -269,13 +265,13 @@ export default function CheckoutPage() {
     }
 
     const invalidItems = cartItems.filter(
-      item => !/^[a-f\d]{24}$/i.test(item.id)
+      (item) => !/^[a-f\d]{24}$/i.test(item.id)
     );
 
     if (invalidItems.length > 0) {
       toast.error(
         `Cannot checkout: some items aren't linked to our store: ${invalidItems
-          .map(i => i.name)
+          .map((i) => i.name)
           .join(", ")}. Please remove them and add from the Shop page.`,
         { duration: 6000 }
       );
@@ -302,8 +298,7 @@ export default function CheckoutPage() {
         .substr(2, 6)
         .toUpperCase()}`;
 
-      // IMPORTANT:
-      // Send both the selected variant and delivery method.
+      // Send both selected variant and delivery method
       const orderPayload = {
         orderNumber,
 
@@ -311,8 +306,7 @@ export default function CheckoutPage() {
           product: item.id,
           quantity: item.quantity || 1,
           price: item.price,
-          subtotal:
-            item.price * (item.quantity || 1),
+          subtotal: item.price * (item.quantity || 1),
 
           // Product variant
           variant: item.variant || null,
@@ -375,7 +369,6 @@ export default function CheckoutPage() {
 
       // Bank transfer
       if (paymentMethod === "transfer") {
-
         if (order?.payment?.bankDetails) {
           setLiveBankDetails({
             bankName:
@@ -393,9 +386,7 @@ export default function CheckoutPage() {
             paymentReference:
               order.payment?.reference,
           });
-
         } else if (order?.bankDetails) {
-
           setLiveBankDetails({
             bankName:
               order.bankDetails.bankName ||
@@ -413,17 +404,15 @@ export default function CheckoutPage() {
               order.payment?.reference ||
               order.paymentReference,
           });
-
         } else if (
           order?.paymentReference ||
           order?.payment?.reference
         ) {
-
-          setLiveBankDetails(prev => ({
+          setLiveBankDetails((prev) => ({
             ...prev,
             paymentReference:
               order?.paymentReference ||
-              order?.payment?.reference
+              order?.payment?.reference,
           }));
         }
 
@@ -463,15 +452,13 @@ export default function CheckoutPage() {
       }
 
       window.location.href = authorizationUrl;
-
     } catch (error: any) {
-
       console.error("Checkout failed:", error);
 
       toast.error(
         error?.response?.data?.message ||
-        error?.message ||
-        "Something went wrong. Please try again."
+          error?.message ||
+          "Something went wrong. Please try again."
       );
 
       setIsProcessing(false);
@@ -484,7 +471,6 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
       <div className="max-w-7xl mx-auto px-6 sm:px-8 py-8">
 
         {/* Progress Indicator */}
@@ -584,7 +570,10 @@ export default function CheckoutPage() {
             <div className="bg-white rounded-lg shadow-sm p-6">
 
               <div className="flex items-center gap-3 mb-6">
-                <User className="text-primary-gold" size={24} />
+                <User
+                  className="text-primary-gold"
+                  size={24}
+                />
 
                 <h2 className="text-xl font-bold text-dark-gray">
                   Customer Details
@@ -598,53 +587,52 @@ export default function CheckoutPage() {
                     label: "Full Name *",
                     key: "fullName",
                     type: "text",
-                    placeholder: "Enter your name"
+                    placeholder: "Enter your name",
                   },
                   {
                     label: "Email Address *",
                     key: "email",
                     type: "email",
-                    placeholder: "Enter email"
+                    placeholder: "Enter email",
                   },
                   {
                     label: "Phone Number *",
                     key: "phone",
                     type: "tel",
-                    placeholder: "Enter phone number"
+                    placeholder: "Enter phone number",
                   },
                   {
                     label: "Street Address *",
                     key: "streetAddress",
                     type: "text",
-                    placeholder: "Enter street address"
+                    placeholder: "Enter street address",
                   },
                   {
                     label: "City *",
                     key: "city",
                     type: "text",
-                    placeholder: "Enter city"
+                    placeholder: "Enter city",
                   },
                   {
                     label: "State *",
                     key: "state",
                     type: "text",
-                    placeholder: "Enter state"
+                    placeholder: "Enter state",
                   },
                   {
                     label: "Zip/Postcode (Optional)",
                     key: "zipCode",
                     type: "text",
-                    placeholder: "Enter zip/postcode"
+                    placeholder: "Enter zip/postcode",
                   },
                 ].map(
                   ({
                     label,
                     key,
                     type,
-                    placeholder
+                    placeholder,
                   }) => (
                     <div key={key}>
-
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         {label}
                       </label>
@@ -659,13 +647,12 @@ export default function CheckoutPage() {
                         onChange={(e) =>
                           setCustomerData({
                             ...customerData,
-                            [key]: e.target.value
+                            [key]: e.target.value,
                           })
                         }
                         placeholder={placeholder}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
                       />
-
                     </div>
                   )
                 )}
@@ -691,28 +678,28 @@ export default function CheckoutPage() {
 
                 {[
                   {
-                    value: "pack",
-                    label: "Pack Delivery",
+                    value: "park",
+                    label: "Park Delivery",
                     sub: "Delivered to your address",
-                    price: null
+                    price: null,
                   },
                   {
                     value: "gig",
                     label: "GIG Logistics",
                     sub: "Delivered via GIG Logistics",
-                    price: null
+                    price: null,
                   },
                   {
                     value: "intentional",
                     label: "Intentional Logistics",
-                    sub: "Delivered via Intentional",
-                    price: null
+                    sub: "Delivered via Intentional Logistics",
+                    price: null,
                   },
                   {
                     value: "pickup",
                     label: "Pick Up",
                     sub: "Come pick up at our store",
-                    price: 0
+                    price: 0,
                   },
                 ].map((opt) => (
 
@@ -751,9 +738,11 @@ export default function CheckoutPage() {
                           {opt.sub}
                         </p>
 
+                        {/* Delivery time */}
                         {opt.value !== "pickup" && (
-                          <p className="text-sm text-gray-600">
-                            By {getDeliveryDate()}
+                          <p className="text-sm text-gray-600 mt-1">
+                            Delivery:{" "}
+                            {getDeliveryTime(opt.value)}
                           </p>
                         )}
                       </div>
@@ -872,15 +861,15 @@ export default function CheckoutPage() {
                         {[
                           {
                             label: "Bank Name",
-                            value: liveBankDetails.bankName
+                            value: liveBankDetails.bankName,
                           },
                           {
                             label: "Account Number",
-                            value: liveBankDetails.accountNumber
+                            value: liveBankDetails.accountNumber,
                           },
                           {
                             label: "Account Name",
-                            value: liveBankDetails.accountName
+                            value: liveBankDetails.accountName,
                           },
                         ].map(
                           ({ label, value }) => (
@@ -924,7 +913,9 @@ export default function CheckoutPage() {
                             </p>
 
                             <p className="font-bold text-primary-gold text-lg">
-                              {formatPrice(calculateTotal())}
+                              {formatPrice(
+                                calculateTotal()
+                              )}
                             </p>
                           </div>
 
@@ -952,7 +943,9 @@ export default function CheckoutPage() {
                           <select
                             value={selectedBank}
                             onChange={(e) =>
-                              setSelectedBank(e.target.value)
+                              setSelectedBank(
+                                e.target.value
+                              )
                             }
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent"
                           >
@@ -1033,7 +1026,9 @@ export default function CheckoutPage() {
                             <p className="text-xs text-green-600">
                               Transfer{" "}
                               <span className="font-bold">
-                                {formatPrice(calculateTotal())}
+                                {formatPrice(
+                                  calculateTotal()
+                                )}
                               </span>{" "}
                               to the account above
                               {liveBankDetails.paymentReference && (
@@ -1054,7 +1049,9 @@ export default function CheckoutPage() {
                                 type="text"
                                 value={transferReference}
                                 onChange={(e) =>
-                                  setTransferReference(e.target.value)
+                                  setTransferReference(
+                                    e.target.value
+                                  )
                                 }
                                 placeholder="e.g. TRF202401151230"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-gold focus:border-transparent text-sm"
@@ -1068,7 +1065,9 @@ export default function CheckoutPage() {
 
                             <button
                               type="button"
-                              onClick={handleSubmitReference}
+                              onClick={
+                                handleSubmitReference
+                              }
                               disabled={submittingRef}
                               className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                             >
@@ -1142,8 +1141,8 @@ export default function CheckoutPage() {
                     className="underline text-primary-gold"
                   >
                     terms & conditions
-                  </Link>
-                  {" "}and{" "}
+                  </Link>{" "}
+                  and{" "}
                   <Link
                     href="/privacy"
                     className="underline text-primary-gold"
@@ -1214,7 +1213,6 @@ export default function CheckoutPage() {
 
                     </div>
                   );
-
                 })}
 
               </div>
@@ -1254,7 +1252,9 @@ export default function CheckoutPage() {
                   </span>
 
                   <span className="font-semibold">
-                    {formatPrice(calculateSubtotal())}
+                    {formatPrice(
+                      calculateSubtotal()
+                    )}
                   </span>
 
                 </div>
@@ -1266,7 +1266,9 @@ export default function CheckoutPage() {
                   </span>
 
                   <span className="font-semibold">
-                    {formatPrice(getShippingCost())}
+                    {formatPrice(
+                      getShippingCost()
+                    )}
                   </span>
 
                 </div>
@@ -1278,7 +1280,9 @@ export default function CheckoutPage() {
                   </span>
 
                   <span className="font-bold text-lg text-primary-gold">
-                    {formatPrice(calculateTotal())}
+                    {formatPrice(
+                      calculateTotal()
+                    )}
                   </span>
 
                 </div>
@@ -1291,7 +1295,9 @@ export default function CheckoutPage() {
                   type="checkbox"
                   checked={rememberInfo}
                   onChange={(e) =>
-                    setRememberInfo(e.target.checked)
+                    setRememberInfo(
+                      e.target.checked
+                    )
                   }
                   className="w-4 h-4 text-primary-gold focus:ring-primary-gold rounded"
                 />
@@ -1316,10 +1322,12 @@ export default function CheckoutPage() {
               className="text-green-500"
               size={16}
             />
+
             <Shield
               className="text-green-500"
               size={16}
             />
+
             <span>SSL Secure</span>
           </div>
 
@@ -1328,6 +1336,7 @@ export default function CheckoutPage() {
               className="text-green-500"
               size={16}
             />
+
             <span>Verify by Paystack</span>
           </div>
 
@@ -1336,13 +1345,13 @@ export default function CheckoutPage() {
               className="text-green-500"
               size={16}
             />
+
             <span>Privacy Protection</span>
           </div>
 
         </div>
 
       </div>
-
     </div>
   );
 }

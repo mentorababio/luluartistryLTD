@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { CheckCircle, XCircle, Eye, Search, Loader, X, Copy, RefreshCw } from "lucide-react";
+import { CheckCircle, XCircle, Eye, Search,   Truck, Loader, X, Copy, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 
 const BASE_URL = "https://luluartistry-backend.onrender.com/api";
@@ -8,15 +8,56 @@ const BASE_URL = "https://luluartistry-backend.onrender.com/api";
 interface Order {
   _id: string;
   orderNumber: string;
-  customerInfo: { firstName: string; lastName: string; email: string; phone: string; };
-  items: Array<{ productSnapshot?: { name: string; price: number }; quantity: number; price: number; subtotal: number; }>;
-  pricing: { subtotal: number; shippingCost: number; discount: number; total: number; };
-  payment: { method: string; status: string; reference?: string; paidAt?: string; };
+
+  customerInfo: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+
+  items: Array<{
+    productSnapshot?: {
+      name: string;
+      price: number;
+    };
+    quantity: number;
+    price: number;
+    subtotal: number;
+    variant?: string | null;
+  }>;
+
+  pricing: {
+    subtotal: number;
+    shippingCost: number;
+    discount: number;
+    total: number;
+  };
+
+  payment: {
+    method: string;
+    status: string;
+    reference?: string;
+    paidAt?: string;
+  };
+
+  deliveryMethod:
+    | "pack"
+    | "gig"
+    | "intentional"
+    | "pickup";
+
   orderStatus: string;
-  shippingAddress: { street: string; city: string; state: string; landmark?: string; };
+
+  shippingAddress: {
+    street: string;
+    city: string;
+    state: string;
+    landmark?: string;
+  };
+
   createdAt: string;
 }
-
 const STATUS_COLORS: Record<string, string> = {
   pending:    "bg-yellow-100 text-yellow-800",
   processing: "bg-blue-100 text-blue-800",
@@ -298,22 +339,78 @@ setSelectedOrder({ ...updatedOrder });
                     <div><p className="text-gray-500 text-xs">Address</p><p className="font-medium">{selectedOrder.shippingAddress.street}, {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state}</p></div>
                   </div>
                 </div>
+{/* Delivery Information */}
+<div>
+  <h3 className="font-semibold text-gray-900 mb-3">
+    Delivery Information
+  </h3>
+
+  <div className="bg-gray-50 rounded-lg p-4">
+
+    <div className="flex items-center justify-between">
+
+      <div>
+        <p className="text-gray-500 text-xs">
+          Delivery Method
+        </p>
+
+        <p className="font-semibold text-gray-900 mt-1">
+          {selectedOrder.deliveryMethod === "pack"
+            ? "Pack Delivery"
+            : selectedOrder.deliveryMethod === "gig"
+            ? "GIG Logistics"
+            : selectedOrder.deliveryMethod === "intentional"
+            ? "Intentional Logistics"
+            : selectedOrder.deliveryMethod === "pickup"
+            ? "Pick Up"
+            : "Not specified"}
+        </p>
+      </div>
+
+      <Truck
+        size={22}
+        className="text-yellow-500" />
+
+    </div>
+
+  </div>
+</div>
 
                 {/* Items */}
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Order Items</h3>
-                  <div className="space-y-2">
-                    {selectedOrder.items.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{item.productSnapshot?.name || "Product"}</p>
-                          <p className="text-xs text-gray-500">Qty: {item.quantity} × {formatPrice(item.price)}</p>
-                        </div>
-                        <p className="text-sm font-bold text-gray-900">{formatPrice(item.subtotal)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+<div>
+  <h3 className="font-semibold text-gray-900 mb-3">
+    Order Items
+  </h3>
+
+  <div className="space-y-2">
+    {selectedOrder.items.map((item, i) => (
+      <div
+        key={i}
+        className="flex items-center justify-between bg-gray-50 rounded-lg p-3"
+      >
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            {item.productSnapshot?.name || "Product"}
+          </p>
+
+          {item.variant && (
+            <p className="text-xs text-yellow-600 font-semibold mt-1">
+              Variant: {item.variant}
+            </p>
+          )}
+
+          <p className="text-xs text-gray-500 mt-1">
+            Qty: {item.quantity} × {formatPrice(item.price)}
+          </p>
+        </div>
+
+        <p className="text-sm font-bold text-gray-900">
+          {formatPrice(item.subtotal)}
+        </p>
+      </div>
+    ))}
+  </div>
+</div>
 
                 {/* Pricing */}
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
